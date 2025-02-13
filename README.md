@@ -56,6 +56,7 @@ npm install
 ```env
 VITE_SUPABASE_URL=sua_url_do_supabase
 VITE_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase
+VITE_SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role_do_supabase  # Necessária para importação de dados
 ```
 
 4. Execute o script SQL de configuração:
