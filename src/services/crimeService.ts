@@ -45,6 +45,31 @@ export const crimeService = {
     try {
       console.log('Iniciando importação do arquivo:', file.name);
       
+      // Limpar dados existentes
+      console.log('Limpando dados existentes...');
+      const { error: deleteError } = await supabaseAdmin
+        .from('crimes')
+        .delete()
+        .neq('seq', 0); // usando neq para garantir que a query afete todas as linhas
+
+      if (deleteError) {
+        console.error('Erro ao limpar dados:', deleteError);
+        throw deleteError;
+      }
+
+      // Limpar série temporal
+      const { error: deleteTimeseriesError } = await supabaseAdmin
+        .from('crime_timeseries')
+        .delete()
+        .neq('count', -1); // usando neq para garantir que a query afete todas as linhas
+
+      if (deleteTimeseriesError) {
+        console.error('Erro ao limpar série temporal:', deleteTimeseriesError);
+        throw deleteTimeseriesError;
+      }
+
+      console.log('Dados antigos removidos com sucesso');
+      
       const data = await file.arrayBuffer();
       console.log('Arquivo carregado em memória');
       
