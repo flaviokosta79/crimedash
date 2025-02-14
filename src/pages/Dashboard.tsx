@@ -366,24 +366,22 @@ export const Dashboard: React.FC = () => {
         const { error } = await getSupabaseAdmin()
           .from('crimes')
           .update({
-            indicador_estrategico: null,
+            seq: null,
+            seq_bo: null,
+            ano_bo: null,
             data_fato: null,
-            delegacia_nome: null,
-            delegacia_circunscricao: null,
-            risp: null,
+            hora_fato: null,
+            data_comunicacao: null,
+            titulo_do_delito: null,
+            tipo_do_delito: null,
+            indicador_estrategico: null,
+            fase_divulgacao: null,
+            dia_semana: null,
             aisp: null,
-            cisp: null,
-            fase: null,
-            tipo_registro: null,
-            titulo_registro: null,
-            logradouro: null,
-            numero: null,
-            complemento: null,
-            bairro: null,
+            risp: null,
             municipio: null,
-            uf: null,
-            latitude: 0,
-            longitude: 0
+            bairro: null,
+            faixa_horario: null
           })
           .neq('id', 0);
 
@@ -545,7 +543,9 @@ export const Dashboard: React.FC = () => {
 
             {/* Battalion Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-              {Object.entries(data.units).map(([unit, stats]: [string, any]) => (
+              {Object.entries(data.units)
+                .filter(([unit]) => unit !== 'null' && unit !== null)
+                .map(([unit, stats]: [string, any]) => (
                 <Link
                   key={unit}
                   to={`/unit/${unit}`}
