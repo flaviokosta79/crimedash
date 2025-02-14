@@ -1,35 +1,26 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ReferenceLine
+  ResponsiveContainer
 } from 'recharts';
 import { ArrowLeft } from 'lucide-react';
-import { Filters } from '../components/Filters';
 import { CrimeMap } from '../components/CrimeMap';
-import { ImportButton } from '../components/ImportButton';
-import type { Filters as FiltersType, CrimeData, CrimeType, TimeRange, PoliceUnit } from '../types';
-import { crimeService } from '../services/crimeService';
+import type { CrimeData, CrimeType, PoliceUnit } from '../types';
+import { supabase } from '../config/supabase';
 
-const COLORS = {
+// Define as cores para cada tipo de crime (usado em todos os gráficos)
+const CRIME_COLORS = {
   'Letalidade Violenta': '#ff7f0e',
   'Roubo de Veículo': '#2ca02c',
   'Roubo de Rua': '#d62728',
   'Roubo de Carga': '#9467bd'
-};
+} as const;
 
-const BATTALION_COLORS = {
-  '10o BPM': '#1f77b4',
-  '28o BPM': '#ff7f0e',
-  '33o BPM': '#2ca02c',
-  '37o BPM': '#d62728',
-  '2a CIPM': '#9467bd'
-};
-
-// Define battalion areas with their coordinates
-const BATTALION_AREAS = {
-  '10o BPM': [
+// Define AISP areas with their coordinates
+const UNIT_AREAS = {
+  'AISP 10': [
     { city: 'Barra do Piraí', lat: -22.4714, lng: -43.8269 },
     { city: 'Valença', lat: -22.2445, lng: -43.7022 },
     { city: 'Rio das Flores', lat: -22.1692, lng: -43.5856 },
@@ -40,39 +31,66 @@ const BATTALION_AREAS = {
     { city: 'Mendes', lat: -22.5245, lng: -43.7312 },
     { city: 'Engenheiro Paulo de Frontin', lat: -22.5498, lng: -43.6827 }
   ],
-  '28o BPM': [
+  'AISP 28': [
     { city: 'Volta Redonda', lat: -22.5202, lng: -44.0996 },
     { city: 'Barra Mansa', lat: -22.5446, lng: -44.1751 },
     { city: 'Pinheiral', lat: -22.5172, lng: -44.0022 }
   ],
-  '33o BPM': [
+  'AISP 33': [
     { city: 'Mangaratiba', lat: -22.9594, lng: -44.0409 },
     { city: 'Angra dos Reis', lat: -23.0067, lng: -44.3181 },
     { city: 'Rio Claro', lat: -22.7205, lng: -44.1419 }
   ],
-  '37o BPM': [
+  'AISP 37': [
     { city: 'Resende', lat: -22.4705, lng: -44.4509 },
-    { city: 'Itatiaia', lat: -22.4961, lng: -44.5634 },
-    { city: 'Porto Real', lat: -22.4175, lng: -44.2952 },
+    { city: 'Itatiaia', lat: -22.4897, lng: -44.5634 },
+    { city: 'Porto Real', lat: -22.4175, lng: -44.2873 },
     { city: 'Quatis', lat: -22.4043, lng: -44.2597 }
   ],
-  '2a CIPM': [
+  'AISP 43': [
     { city: 'Paraty', lat: -23.2178, lng: -44.7131 }
   ]
 };
 
+// Define o centro de cada AISP
+const UNIT_CENTERS = {
+  'AISP 10': { lat: -22.4039, lng: -43.6634 }, // Centralizado em Vassouras
+  'AISP 28': { lat: -22.5202, lng: -44.0996 }, // Centralizado em Volta Redonda
+  'AISP 33': { lat: -22.9594, lng: -44.0409 }, // Centralizado em Mangaratiba
+  'AISP 37': { lat: -22.4705, lng: -44.4509 }, // Centralizado em Resende
+  'AISP 43': { lat: -23.2178, lng: -44.7131 }  // Centralizado em Paraty
+};
+
+// Define o zoom ideal para cada AISP
+const UNIT_ZOOM = {
+  'AISP 10': 10, // Área maior, zoom mais distante
+  'AISP 28': 11, // Área menor, zoom mais próximo
+  'AISP 33': 10, // Área média
+  'AISP 37': 10, // Área média
+  'AISP 43': 11  // Área pequena, zoom mais próximo
+};
+
+// Define AISP colors
+const UNIT_COLORS = {
+  'AISP 10': '#1f77b4',
+  'AISP 28': '#ff7f0e',
+  'AISP 33': '#2ca02c',
+  'AISP 37': '#d62728',
+  'AISP 43': '#9467bd'
+};
+
 interface CrimeMetrics {
-  name: CrimeType;
+  name: string;
   actual: number;
   target: number;
   difference: number;
 }
 
-const generateCrimeMetrics = (unit: string, crimeData: CrimeData[]): CrimeMetrics[] => {
+const generateCrimeMetrics = (unit: string, crimeData: any[]): CrimeMetrics[] => {
   // Extract crime data for the specified unit
   const crimeMetrics = crimeData.map((crime) => {
     return {
-      name: crime.type as CrimeType,
+      name: crime.type,
       actual: crime.count,
       target: 75,
       difference: crime.count - 75
@@ -83,7 +101,7 @@ const generateCrimeMetrics = (unit: string, crimeData: CrimeData[]): CrimeMetric
 };
 
 // Update the generateTimeSeriesData function to include card visualization data
-const generateTimeSeriesData = (timeRange: TimeRange, unit: string, timeSeriesData: any[]) => {
+const generateTimeSeriesData = (timeRange: string, unit: string, timeSeriesData: any[]) => {
   const data = [];
   const now = new Date();
   let periods;
@@ -172,107 +190,275 @@ const generateTimeSeriesData = (timeRange: TimeRange, unit: string, timeSeriesDa
   return { data, dateFormat, cardData };
 };
 
+const generateHeatMapData = (unit: string, crimes: any[]) => {
+  // Mapeamento de nomes de municípios (incluindo variações)
+  const cityMapping: Record<string, string> = {
+    'rio das flores': 'Rio das Flores',
+    'rio-das-flores': 'Rio das Flores',
+    'riodasflores': 'Rio das Flores',
+    'barra do pirai': 'Barra do Piraí',
+    'barra-do-pirai': 'Barra do Piraí',
+    'barradopirai': 'Barra do Piraí',
+    'valenca': 'Valença',
+    'valença': 'Valença',
+    'pirai': 'Piraí',
+    'piraí': 'Piraí',
+    'vassouras': 'Vassouras',
+    'miguel pereira': 'Miguel Pereira',
+    'miguel-pereira': 'Miguel Pereira',
+    'miguelpereira': 'Miguel Pereira',
+    'paty do alferes': 'Paty do Alferes',
+    'paty-do-alferes': 'Paty do Alferes',
+    'patydoalferes': 'Paty do Alferes',
+    'mendes': 'Mendes',
+    'engenheiro paulo de frontin': 'Engenheiro Paulo de Frontin',
+    'eng paulo de frontin': 'Engenheiro Paulo de Frontin',
+    'eng. paulo de frontin': 'Engenheiro Paulo de Frontin',
+    'volta redonda': 'Volta Redonda',
+    'volta-redonda': 'Volta Redonda',
+    'voltaredonda': 'Volta Redonda',
+    'barra mansa': 'Barra Mansa',
+    'barra-mansa': 'Barra Mansa',
+    'barramansa': 'Barra Mansa',
+    'pinheiral': 'Pinheiral',
+    'mangaratiba': 'Mangaratiba',
+    'angra dos reis': 'Angra dos Reis',
+    'angra-dos-reis': 'Angra dos Reis',
+    'angradosreis': 'Angra dos Reis',
+    'rio claro': 'Rio Claro',
+    'rio-claro': 'Rio Claro',
+    'rioclaro': 'Rio Claro',
+    'resende': 'Resende',
+    'itatiaia': 'Itatiaia',
+    'porto real': 'Porto Real',
+    'porto-real': 'Porto Real',
+    'portoreal': 'Porto Real',
+    'quatis': 'Quatis',
+    'paraty': 'Paraty',
+    'parati': 'Paraty'
+  };
+
+  const unitArea = UNIT_AREAS[unit as keyof typeof UNIT_AREAS] || [];
+  const crimesByCityAndNeighborhood: Record<string, Record<string, { count: number, bairros: Set<string> }>> = {};
+  
+  // Inicializar contadores para cada cidade
+  unitArea.forEach(location => {
+    crimesByCityAndNeighborhood[location.city] = {
+      'Letalidade Violenta': { count: 0, bairros: new Set() },
+      'Roubo de Veículo': { count: 0, bairros: new Set() },
+      'Roubo de Rua': { count: 0, bairros: new Set() },
+      'Roubo de Carga': { count: 0, bairros: new Set() }
+    };
+  });
+
+  // Contar crimes por cidade e tipo
+  crimes.forEach(crime => {
+    const municipioLower = crime.municipio?.toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z\s]/g, '')
+      .replace(/\s+/g, ' ');
+
+    const tipo = crime.indicador_estrategico?.toLowerCase() || '';
+    const bairro = crime.bairro || 'Não informado';
+    
+    const cidadeMapeada = cityMapping[municipioLower];
+    const cityMatch = unitArea.find(location => 
+      location.city === cidadeMapeada
+    );
+
+    if (cityMatch) {
+      switch (tipo) {
+        case 'letalidade violenta':
+          crimesByCityAndNeighborhood[cityMatch.city]['Letalidade Violenta'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Letalidade Violenta'].bairros.add(bairro);
+          break;
+        case 'roubo de rua':
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Rua'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Rua'].bairros.add(bairro);
+          break;
+        case 'roubo de veículo':
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Veículo'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Veículo'].bairros.add(bairro);
+          break;
+        case 'roubo de carga':
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Carga'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Carga'].bairros.add(bairro);
+          break;
+      }
+    }
+  });
+
+  // Gerar dados do mapa de calor
+  const heatMapData = unitArea.flatMap(location => {
+    const cityData = crimesByCityAndNeighborhood[location.city];
+    return Object.entries(cityData)
+      .filter(([_, data]) => data.count > 0)
+      .map(([type, data]) => ({
+        id: `${location.city}-${type}`,
+        date: new Date(),
+        type: type as CrimeType,
+        unit: unit as PoliceUnit,
+        count: data.count,
+        lat: location.lat,
+        lng: location.lng,
+        region: location.city,
+        bairros: Array.from(data.bairros).sort()
+      }));
+  });
+
+  return heatMapData;
+};
+
 export const UnitDashboard: React.FC = () => {
   const { unit } = useParams<{ unit: string }>();
-  const [filters, setFilters] = useState<FiltersType>({ timeRange: 'M' });
-  const [loading, setLoading] = useState(true);
-  const [crimeData, setCrimeData] = useState<CrimeData[]>([]);
-  const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
+  const [mapData, setMapData] = useState<CrimeData[]>([]);
+  const [unitData, setUnitData] = useState({
+    total: 0,
+    lethal_violence: 0,
+    street_robbery: 0,
+    vehicle_robbery: 0,
+    cargo_robbery: 0
+  });
+  const [comparisonData, setComparisonData] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (unit) {
+      loadData();
+      loadComparisonData();
+    }
+  }, [unit]);
 
   const loadData = async () => {
     if (!unit) return;
-    
+
     try {
-      setLoading(true);
-      const now = new Date();
-      let startDate = new Date();
-      
-      switch(filters.timeRange) {
-        case 'D':
-          startDate.setDate(now.getDate() - 1);
-          break;
-        case 'W':
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case 'M':
-          startDate.setMonth(now.getMonth() - 1);
-          break;
-        case 'Y':
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
+      const { data: crimes, error } = await supabase
+        .from('crimes')
+        .select('*')
+        .eq('aisp', unit)
+        .order('data_fato', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar crimes:', error);
+        return;
       }
 
-      const [crimes, timeSeries] = await Promise.all([
-        crimeService.getCrimesByUnit(unit as PoliceUnit),
-        crimeService.getTimeSeriesData(unit as PoliceUnit, startDate, now)
-      ]);
+      const newUnitData = {
+        total: 0,
+        lethal_violence: 0,
+        street_robbery: 0,
+        vehicle_robbery: 0,
+        cargo_robbery: 0
+      };
 
-      setCrimeData(crimes);
-      setTimeSeriesData(timeSeries);
+      crimes?.forEach((crime: any) => {
+        newUnitData.total++;
+
+        const tipo = crime.indicador_estrategico?.toLowerCase() || '';
+
+        switch (tipo) {
+          case 'letalidade violenta':
+            newUnitData.lethal_violence++;
+            break;
+          case 'roubo de rua':
+            newUnitData.street_robbery++;
+            break;
+          case 'roubo de veículo':
+            newUnitData.vehicle_robbery++;
+            break;
+          case 'roubo de carga':
+            newUnitData.cargo_robbery++;
+            break;
+        }
+      });
+
+      const mapDataGenerated = generateHeatMapData(unit, crimes || []);
+      setMapData(mapDataGenerated);
+      setUnitData(newUnitData);
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading data:', error);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [unit, filters.timeRange]);
+  const loadComparisonData = async () => {
+    try {
+      const { data: crimes, error } = await supabase
+        .from('crimes')
+        .select('*')
+        .in('aisp', ['AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43']);
 
-  const crimeMetrics = useMemo(() => generateCrimeMetrics(unit || '', crimeData), [unit, crimeData]);
+      if (error) {
+        console.error('Erro ao buscar dados de comparação:', error);
+        return;
+      }
 
-  const mockCrimeDistribution = useMemo(() => {
-    const crimeDistribution = crimeData.map((crime) => {
-      return {
-        name: crime.type as CrimeType,
-        value: crime.count
+      const unitsData: Record<string, any> = {
+        'AISP 10': {
+          name: 'AISP 10',
+          'Letalidade Violenta': 0,
+          'Roubo de Veículo': 0,
+          'Roubo de Rua': 0,
+          'Roubo de Carga': 0
+        },
+        'AISP 28': {
+          name: 'AISP 28',
+          'Letalidade Violenta': 0,
+          'Roubo de Veículo': 0,
+          'Roubo de Rua': 0,
+          'Roubo de Carga': 0
+        },
+        'AISP 33': {
+          name: 'AISP 33',
+          'Letalidade Violenta': 0,
+          'Roubo de Veículo': 0,
+          'Roubo de Rua': 0,
+          'Roubo de Carga': 0
+        },
+        'AISP 37': {
+          name: 'AISP 37',
+          'Letalidade Violenta': 0,
+          'Roubo de Veículo': 0,
+          'Roubo de Rua': 0,
+          'Roubo de Carga': 0
+        },
+        'AISP 43': {
+          name: 'AISP 43',
+          'Letalidade Violenta': 0,
+          'Roubo de Veículo': 0,
+          'Roubo de Rua': 0,
+          'Roubo de Carga': 0
+        }
       };
-    });
 
-    return crimeDistribution;
-  }, [crimeData]);
+      crimes?.forEach((crime: any) => {
+        const aisp = crime.aisp;
+        const tipo = crime.indicador_estrategico?.toLowerCase() || '';
 
-  const mockComparisonData = useMemo(() => {
-    return Object.keys(BATTALION_COLORS).map(battalion => {
-      const crimeData = crimeService.getCrimesByUnit(battalion as PoliceUnit);
-      return {
-        crimeType: battalion,
-        'Letalidade Violenta': crimeData['Letalidade Violenta'] || 0,
-        'Roubo de Veículo': crimeData['Roubo de Veículo'] || 0,
-        'Roubo de Rua': crimeData['Roubo de Rua'] || 0,
-        'Roubo de Carga': crimeData['Roubo de Carga'] || 0
-      };
-    });
-  }, []);
-
-  const generateHeatMapData = (unit: string, crimeData: CrimeData[]) => {
-    const battalionArea = BATTALION_AREAS[unit as keyof typeof BATTALION_AREAS] || [];
-    
-    return battalionArea.flatMap(location => {
-      const crimeCounts = crimeData.map((crime) => {
-        return {
-          id: `${location.city}-${crime.id}`,
-          date: crime.date,
-          type: crime.type as CrimeType,
-          unit: unit as any,
-          count: crime.count,
-          target: 75,
-          lat: location.lat + (Math.random() - 0.5) * 0.02,
-          lng: location.lng + (Math.random() - 0.5) * 0.02,
-          shift: 'Manhã',
-          region: location.city
-        };
+        if (unitsData[aisp]) {
+          switch (tipo) {
+            case 'letalidade violenta':
+              unitsData[aisp]['Letalidade Violenta']++;
+              break;
+            case 'roubo de rua':
+              unitsData[aisp]['Roubo de Rua']++;
+              break;
+            case 'roubo de veículo':
+              unitsData[aisp]['Roubo de Veículo']++;
+              break;
+            case 'roubo de carga':
+              unitsData[aisp]['Roubo de Carga']++;
+              break;
+          }
+        }
       });
 
-      return crimeCounts;
-    });
+      setComparisonData(Object.values(unitsData));
+    } catch (error) {
+      console.error('Error loading comparison data:', error);
+    }
   };
-
-  const mockMapData: CrimeData[] = useMemo(
-    () => generateHeatMapData(unit || '', crimeData),
-    [unit, crimeData]
-  );
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
@@ -327,143 +513,112 @@ export const UnitDashboard: React.FC = () => {
 
         <div className="grid gap-6">
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <Filters value={filters} onChange={setFilters} />
-                <ImportButton onImportSuccess={loadData} />
-              </div>
-            </div>
-
             {/* Crime Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              {crimeMetrics.map((metric) => (
-                <div key={metric.name} className="bg-white p-4 rounded-lg shadow-lg">
-                  <h3 className="text-sm font-semibold text-gray-600">{metric.name}</h3>
-                  <p className="text-2xl font-bold mt-2">{metric.actual}</p>
-                  <p className="text-sm text-gray-500">
-                    Meta: {metric.target} | Diferença: {metric.difference}
-                  </p>
-                </div>
-              ))}
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <h3 className="text-sm font-semibold text-gray-600">Letalidade Violenta</h3>
+                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Letalidade Violenta'] }}>
+                  {unitData.lethal_violence}
+                </p>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <h3 className="text-sm font-semibold text-gray-600">Roubo de Veículo</h3>
+                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Roubo de Veículo'] }}>
+                  {unitData.vehicle_robbery}
+                </p>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <h3 className="text-sm font-semibold text-gray-600">Roubo de Rua</h3>
+                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Roubo de Rua'] }}>
+                  {unitData.street_robbery}
+                </p>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <h3 className="text-sm font-semibold text-gray-600">Roubo de Carga</h3>
+                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Roubo de Carga'] }}>
+                  {unitData.cargo_robbery}
+                </p>
+              </div>
             </div>
 
+            {/* Crime Distribution and Comparison */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="col-span-1">
-                {/* Temporal Evolution Graph */}
-                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
-                  <h2 className="text-xl font-bold mb-4 font-['Roboto']">
-                    Evolução Temporal
-                  </h2>
-                  <div className="h-[400px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart 
-                        data={timeSeriesData}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h2 className="text-xl font-bold mb-4 font-['Roboto']">
+                  Distribuição de Crimes
+                </h2>
+                <div className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { id: 1, name: 'Letalidade Violenta', value: unitData.lethal_violence },
+                          { id: 2, name: 'Roubo de Veículo', value: unitData.vehicle_robbery },
+                          { id: 3, name: 'Roubo de Rua', value: unitData.street_robbery },
+                          { id: 4, name: 'Roubo de Carga', value: unitData.cargo_robbery }
+                        ].filter(item => item.value > 0)} // Filtra apenas valores maiores que 0
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={150}
+                        label={PieChartLabel}
+                        labelLine={false}
                       >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="date"
-                          tickFormatter={formatDate}
-                        />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        <ReferenceLine 
-                          y={75} 
-                          stroke="#666" 
-                          strokeDasharray="3 3"
-                          label={{ value: 'Meta', position: 'right' }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="target"
-                          name="Meta"
-                          stroke="#666"
-                          strokeDasharray="5 5"
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="occurrences"
-                          name="Ocorrências"
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          stroke={(dataPoint: any) => dataPoint.occurrences > dataPoint.target ? '#ef4444' : '#22c55e'}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Crime Distribution Pie Chart */}
-                <div className="bg-white p-6 rounded-lg shadow-lg">
-                  <h2 className="text-xl font-bold mb-4 font-['Roboto']">
-                    Distribuição por Tipo de Crime
-                  </h2>
-                  <div className="h-[400px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={mockCrimeDistribution}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={150}
-                          label={PieChartLabel}
-                          labelLine={false}
-                        >
-                          {mockCrimeDistribution.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS[entry.name as CrimeType]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                        {[
+                          { id: 1, name: 'Letalidade Violenta', value: unitData.lethal_violence },
+                          { id: 2, name: 'Roubo de Veículo', value: unitData.vehicle_robbery },
+                          { id: 3, name: 'Roubo de Rua', value: unitData.street_robbery },
+                          { id: 4, name: 'Roubo de Carga', value: unitData.cargo_robbery }
+                        ]
+                        .filter(item => item.value > 0) // Filtra apenas valores maiores que 0
+                        .map((entry, index) => (
+                          <Cell 
+                            key={`crime-cell-${index}`}
+                            fill={CRIME_COLORS[entry.name as keyof typeof CRIME_COLORS]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="col-span-1">
-                {/* Battalion Comparison Chart */}
-                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
-                  <h2 className="text-xl font-bold mb-4 font-['Roboto']">
-                    Comparativo com Outros Batalhões
-                  </h2>
-                  <div className="h-[400px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={mockComparisonData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="crimeType" />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
-                        {Object.keys(BATTALION_COLORS).map((battalion) => (
-                          <Bar
-                            key={battalion}
-                            dataKey={battalion}
-                            fill={BATTALION_COLORS[battalion as keyof typeof BATTALION_COLORS]}
-                            stackId="stack"
-                          />
-                        ))}
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+              <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h2 className="text-xl font-bold mb-4 font-['Roboto']">
+                  Comparação com Outras AISPs
+                </h2>
+                <div className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={comparisonData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="Letalidade Violenta" fill={CRIME_COLORS['Letalidade Violenta']} />
+                      <Bar dataKey="Roubo de Veículo" fill={CRIME_COLORS['Roubo de Veículo']} />
+                      <Bar dataKey="Roubo de Rua" fill={CRIME_COLORS['Roubo de Rua']} />
+                      <Bar dataKey="Roubo de Carga" fill={CRIME_COLORS['Roubo de Carga']} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
+              </div>
+            </div>
 
-                {/* Heat Map */}
-                <div className="bg-white p-6 rounded-lg shadow-lg" style={{ position: 'relative' }}>
-                  <h2 className="text-xl font-bold mb-4 font-['Roboto']">
-                    Mapa de Calor
-                  </h2>
-                  <div className="h-[400px]">
-                    <CrimeMap data={mockMapData} />
-                  </div>
-                </div>
+            {/* Heat Map */}
+            <div className="grid grid-cols-1 gap-6">
+              <h2 className="text-lg font-semibold mb-2">
+                Mapa de Calor
+              </h2>
+              <div className="h-[500px]">
+                <CrimeMap 
+                  data={mapData} 
+                  center={unit ? UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] : undefined}
+                  zoom={unit ? UNIT_ZOOM[unit as keyof typeof UNIT_ZOOM] : undefined}
+                />
               </div>
             </div>
           </div>

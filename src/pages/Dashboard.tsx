@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Filters } from '../components/Filters';
 import { ImportButton } from '../components/ImportButton';
 import {
@@ -139,7 +140,6 @@ export const Dashboard: React.FC = () => {
         return acc;
       }, {});
 
-      console.log('Metas carregadas:', targetsByUnit);
       setTargets(targetsByUnit);
     };
 
@@ -149,7 +149,6 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('Carregando dados...');
         setLoading(true);
         setError(null);
 
@@ -165,12 +164,9 @@ export const Dashboard: React.FC = () => {
           return;
         }
 
-        console.log('Crimes encontrados:', crimes?.length);
-
         // Agrupar dados por unidade
         const unitData = crimes?.reduce((acc: any, crime: any) => {
           const unit = crime.aisp;
-          console.log('Processando crime da unidade:', unit);
           
           if (!acc[unit]) {
             acc[unit] = {
@@ -185,8 +181,6 @@ export const Dashboard: React.FC = () => {
           acc[unit].total++;
 
           const tipo = crime.indicador_estrategico?.toLowerCase() || '';
-          console.log('Indicador estratégico:', tipo);
-
           switch (tipo) {
             case 'letalidade violenta':
               acc[unit].lethal_violence++;
@@ -205,8 +199,6 @@ export const Dashboard: React.FC = () => {
           return acc;
         }, {});
 
-        console.log('Dados por unidade:', unitData);
-
         // Buscar série temporal
         const { data: timeseries, error: timeseriesError } = await supabase
           .from('crime_timeseries')
@@ -219,8 +211,6 @@ export const Dashboard: React.FC = () => {
           setError(timeseriesError.message);
           return;
         }
-
-        console.log('Série temporal:', timeseries?.length);
 
         // Organizar série temporal
         const timeseriesData = timeseries?.reduce((acc: any, row: any) => {
@@ -345,51 +335,55 @@ export const Dashboard: React.FC = () => {
             {/* Battalion Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
               {Object.entries(data.units).map(([unit, stats]: [string, any]) => (
-                <div
+                <Link
                   key={unit}
-                  className={`${battalionColors[unit as PoliceUnit]} text-white rounded-lg p-6 shadow-lg cursor-pointer transition-transform hover:scale-105`}
-                  onClick={() => navigate(`/unit/${unit}`)}
+                  to={`/unit/${unit}`}
+                  className="block"
                 >
-                  <h3 className="text-lg font-semibold">{unit}</h3>
-                  <div className="space-y-2 mt-4">
-                    <div>
-                      <p className="text-sm">Letalidade</p>
-                      <p className="text-lg font-bold">
-                        {stats.lethal_violence}
-                        <span className="text-sm font-normal ml-2">
-                          Meta: {targets[unit]?.['letalidade violenta'] || 0}
-                        </span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm">Roubo de Rua</p>
-                      <p className="text-lg font-bold">
-                        {stats.street_robbery}
-                        <span className="text-sm font-normal ml-2">
-                          Meta: {targets[unit]?.['roubo de rua'] || 0}
-                        </span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm">Roubo de Veículo</p>
-                      <p className="text-lg font-bold">
-                        {stats.vehicle_robbery}
-                        <span className="text-sm font-normal ml-2">
-                          Meta: {targets[unit]?.['roubo de veículo'] || 0}
-                        </span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm">Roubo de Carga</p>
-                      <p className="text-lg font-bold">
-                        {stats.cargo_robbery}
-                        <span className="text-sm font-normal ml-2">
-                          Meta: {targets[unit]?.['roubo de carga'] || 0}
-                        </span>
-                      </p>
+                  <div
+                    className={`${battalionColors[unit as PoliceUnit]} text-white rounded-lg p-6 shadow-lg cursor-pointer transition-transform hover:scale-105`}
+                  >
+                    <h3 className="text-lg font-semibold">{unit}</h3>
+                    <div className="space-y-2 mt-4">
+                      <div>
+                        <p className="text-sm">Letalidade</p>
+                        <p className="text-lg font-bold">
+                          {stats.lethal_violence}
+                          <span className="text-sm font-normal ml-2">
+                            Meta: {targets[unit]?.['letalidade violenta'] || 0}
+                          </span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm">Roubo de Rua</p>
+                        <p className="text-lg font-bold">
+                          {stats.street_robbery}
+                          <span className="text-sm font-normal ml-2">
+                            Meta: {targets[unit]?.['roubo de rua'] || 0}
+                          </span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm">Roubo de Veículo</p>
+                        <p className="text-lg font-bold">
+                          {stats.vehicle_robbery}
+                          <span className="text-sm font-normal ml-2">
+                            Meta: {targets[unit]?.['roubo de veículo'] || 0}
+                          </span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm">Roubo de Carga</p>
+                        <p className="text-lg font-bold">
+                          {stats.cargo_robbery}
+                          <span className="text-sm font-normal ml-2">
+                            Meta: {targets[unit]?.['roubo de carga'] || 0}
+                          </span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
 
@@ -432,17 +426,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mt-4 p-4 bg-gray-100 rounded">
-        <h2 className="font-bold mb-2">Log de Dados:</h2>
-        <pre className="whitespace-pre-wrap">
-          Crimes encontrados: {Object.values(data.units).reduce((acc, unit) => acc + unit.total, 0)}
-          {'\n'}
-          Dados por unidade: {JSON.stringify(data.units, null, 2)}
-          {'\n'}
-          Série temporal: {data.timeseries.length}
-        </pre>
       </div>
     </div>
   );

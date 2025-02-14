@@ -14,13 +14,6 @@ const supabaseAdmin = createClient(
   import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Log da configuração (sem mostrar as chaves completas)
-console.log('Configuração Supabase:', {
-  url: import.meta.env.VITE_SUPABASE_URL,
-  anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 10) + '...',
-  serviceKey: import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY?.substring(0, 10) + '...'
-});
-
 interface XLSXRow {
   'objectid': string;
   'Dia do fato': string;
@@ -227,5 +220,61 @@ export const crimeService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async getTimeSeriesData(unit: string, startDate: Date, endDate: Date) {
+    try {
+      const { data, error } = await supabase
+        .from('crimes')
+        .select('*')
+        .eq('aisp', unit)
+        .gte('data_fato', startDate.toISOString().split('T')[0])
+        .lte('data_fato', endDate.toISOString().split('T')[0])
+        .order('data_fato', { ascending: true });
+
+      if (error) throw error;
+
+      // Criar um objeto com todas as datas no intervalo
+      const dates: { [key: string]: any } = {};
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        dates[dateStr] = {
+          date: dateStr,
+          'Letalidade Violenta': 0,
+          'Roubo de Veículo': 0,
+          'Roubo de Rua': 0,
+          'Roubo de Carga': 0
+        };
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Agrupar dados por data
+      data?.forEach(crime => {
+        const date = crime.data_fato;
+        if (dates[date]) {
+          switch (crime.indicador_estrategico) {
+            case 'Letalidade Violenta':
+              dates[date]['Letalidade Violenta']++;
+              break;
+            case 'Roubo de Veículo':
+              dates[date]['Roubo de Veículo']++;
+              break;
+            case 'Roubo de Rua':
+              dates[date]['Roubo de Rua']++;
+              break;
+            case 'Roubo de Carga':
+              dates[date]['Roubo de Carga']++;
+              break;
+          }
+        }
+      });
+
+      // Converter objeto agrupado em array
+      return Object.values(dates);
+    } catch (error) {
+      console.error('Erro ao buscar série temporal:', error);
+      return [];
+    }
   }
 };

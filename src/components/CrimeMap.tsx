@@ -1,67 +1,73 @@
 import React, { useState } from 'react';
-import { MapContainer, TileLayer, Circle, Tooltip, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { CrimeData, CrimeType } from '../types';
-import L from 'leaflet';
 
-// Define a custom icon for the marker
-const crimeIcon = new L.Icon({
-  iconUrl: '/crime-marker.png', // Replace with your actual icon path
+// Fix the leaflet icon issue
+import L from 'leaflet';
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
   iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowUrl: null,
-  shadowSize: [0,0],
-  shadowAnchor: [0, 0]
+  iconAnchor: [12, 41]
 });
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Cores consistentes para todos os tipos de crime
+const CRIME_COLORS = {
+  'Letalidade Violenta': '#ff7f0e',
+  'Roubo de Veículo': '#2ca02c',
+  'Roubo de Rua': '#d62728',
+  'Roubo de Carga': '#9467bd'
+} as const;
 
 interface CrimeMapProps {
   data: CrimeData[];
+  center?: { lat: number; lng: number };
+  zoom?: number;
 }
 
-export const CrimeMap: React.FC<CrimeMapProps> = ({ data }) => {
-  const [selectedCrime, setSelectedCrime] = useState<CrimeData | null>(null);
+export const CrimeMap: React.FC<CrimeMapProps> = ({ data, center, zoom = 10 }) => {
+  const [hoveredCrimes, setHoveredCrimes] = useState<CrimeData[]>([]);
 
-  // Calculate center based on data points
-  const center = data.length > 0
+  // Calculate center based on data points if not provided
+  const mapCenter = center || (data.length > 0
     ? {
         lat: data.reduce((sum, point) => sum + point.lat, 0) / data.length,
         lng: data.reduce((sum, point) => sum + point.lng, 0) / data.length
       }
-    : { lat: -22.9068, lng: -43.1729 }; // Default to Rio de Janeiro region
-
-  const handleMapClick = (event: any) => {
-    const { lat, lng } = event.latlng;
-    const closestCrime = data.reduce((prev, curr) => {
-      const prevDistance = Math.sqrt(Math.pow(prev.lat - lat, 2) + Math.pow(prev.lng - lng, 2));
-      const currDistance = Math.sqrt(Math.pow(curr.lat - lat, 2) + Math.pow(curr.lng - lng, 2));
-      return currDistance < prevDistance ? curr : prev;
-    });
-    setSelectedCrime(closestCrime);
-  };
+    : { lat: -22.9068, lng: -43.1729 }); // Default to Rio de Janeiro region
 
   const getColor = (crimeType: CrimeType): string => {
-    switch (crimeType) {
-      case 'Letalidade Violenta':
-        return '#ff7f0e';
-      case 'Roubo de Veículo':
-        return '#2ca02c';
-      case 'Roubo de Rua':
-        return '#d62728';
-      case 'Roubo de Carga':
-        return '#9467bd';
-      default:
-        return '#000000'; // Black as default
-    }
+    return CRIME_COLORS[crimeType] || '#000000';
+  };
+
+  // Calcular o raio baseado no número de ocorrências
+  const getRadius = (count: number): number => {
+    return Math.min(300 + (count * 300), 3000);
+  };
+
+  // Encontrar crimes próximos
+  const findNearbyCrimes = (targetLat: number, targetLng: number) => {
+    const DISTANCE_THRESHOLD = 0.02; // Aproximadamente 2km
+    return data.filter(crime => {
+      const latDiff = Math.abs(crime.lat - targetLat);
+      const lngDiff = Math.abs(crime.lng - targetLng);
+      return latDiff < DISTANCE_THRESHOLD && lngDiff < DISTANCE_THRESHOLD;
+    });
   };
 
   return (
-    <div className="h-[400px] rounded-lg overflow-hidden">
+    <div className="h-[500px] rounded-lg overflow-hidden border-2 border-gray-200">
       <MapContainer
-        center={center}
-        zoom={9}
+        center={[mapCenter.lat, mapCenter.lng]}
+        zoom={zoom}
         style={{ height: '100%', width: '100%' }}
-        onClick={handleMapClick}
+        scrollWheelZoom={true}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -71,19 +77,69 @@ export const CrimeMap: React.FC<CrimeMapProps> = ({ data }) => {
           <Circle
             key={crime.id}
             center={[crime.lat, crime.lng]}
-            radius={1000}
+            radius={getRadius(crime.count)}
             pathOptions={{
               color: getColor(crime.type),
-              fillOpacity: 0.7
+              fillColor: getColor(crime.type),
+              fillOpacity: 0.4,
+              weight: 1,
+              opacity: 0.6
+            }}
+            eventHandlers={{
+              mouseover: (e) => {
+                const layer = e.target;
+                layer.setStyle({
+                  fillOpacity: 0.7,
+                  weight: 2,
+                  opacity: 0.9
+                });
+                const nearbyCrimes = findNearbyCrimes(crime.lat, crime.lng);
+                setHoveredCrimes(nearbyCrimes);
+              },
+              mouseout: (e) => {
+                const layer = e.target;
+                layer.setStyle({
+                  fillOpacity: 0.4,
+                  weight: 1,
+                  opacity: 0.6
+                });
+                setHoveredCrimes([]);
+              }
             }}
           >
-            <Tooltip>
-              <div className="text-sm">
-                <p className="font-semibold">{crime.region}</p>
-                <p>{crime.type}</p>
-                <p>Ocorrências: {crime.count}</p>
-              </div>
-            </Tooltip>
+            {hoveredCrimes.length > 0 && hoveredCrimes.includes(crime) && (
+              <Tooltip>
+                <div className="bg-white p-2 rounded-lg shadow-lg border border-gray-200 max-w-xs">
+                  {hoveredCrimes.map((nearbyCrime, index) => (
+                    <div key={nearbyCrime.id} className={index > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-bold text-lg">{nearbyCrime.region}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: getColor(nearbyCrime.type) }}
+                        />
+                        <p className="text-sm">{nearbyCrime.type}</p>
+                        <p className="text-sm font-semibold ml-auto">
+                          {nearbyCrime.count} ocorrência{nearbyCrime.count !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      {nearbyCrime.bairros && nearbyCrime.bairros.length > 0 && (
+                        <div className="mt-1 text-sm text-gray-600">
+                          <p className="font-medium mb-1">Bairros:</p>
+                          <ul className="list-disc pl-4 text-xs space-y-0.5">
+                            {nearbyCrime.bairros.map((bairro, idx) => (
+                              <li key={idx}>{bairro}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Tooltip>
+            )}
           </Circle>
         ))}
       </MapContainer>
