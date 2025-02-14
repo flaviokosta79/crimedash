@@ -240,24 +240,7 @@ export const Dashboard: React.FC = () => {
         setLoading(true);
         const { error } = await getSupabaseAdmin()
           .from('crimes')
-          .update({
-            seq: null,
-            seq_bo: null,
-            ano_bo: null,
-            data_fato: null,
-            hora_fato: null,
-            data_comunicacao: null,
-            titulo_do_delito: null,
-            tipo_do_delito: null,
-            indicador_estrategico: null,
-            fase_divulgacao: null,
-            dia_semana: null,
-            aisp: null,
-            risp: null,
-            municipio: null,
-            bairro: null,
-            faixa_horario: null
-          })
+          .delete()
           .neq('id', 0);
 
         if (error) throw error;
