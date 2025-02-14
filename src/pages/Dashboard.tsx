@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { ImportButton } from '../components/ImportButton';
@@ -29,48 +29,11 @@ export const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState<TimeRange>('30D');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardData>({
-    units: {
-      'AISP 10': {
-        total: 0,
-        lethal_violence: 0,
-        street_robbery: 0,
-        vehicle_robbery: 0,
-        cargo_robbery: 0
-      },
-      'AISP 28': {
-        total: 0,
-        lethal_violence: 0,
-        street_robbery: 0,
-        vehicle_robbery: 0,
-        cargo_robbery: 0
-      },
-      'AISP 33': {
-        total: 0,
-        lethal_violence: 0,
-        street_robbery: 0,
-        vehicle_robbery: 0,
-        cargo_robbery: 0
-      },
-      'AISP 37': {
-        total: 0,
-        lethal_violence: 0,
-        street_robbery: 0,
-        vehicle_robbery: 0,
-        cargo_robbery: 0
-      },
-      'AISP 43': {
-        total: 0,
-        lethal_violence: 0,
-        street_robbery: 0,
-        vehicle_robbery: 0,
-        cargo_robbery: 0
-      }
-    },
-    timeseries: []
-  });
+  const [cardData, setCardData] = useState<Record<string, any>>({});
+  const [graphData, setGraphData] = useState<any[]>([]);
   const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
   const navigate = useNavigate();
+  const chartRef = useRef<HTMLDivElement>(null);
 
   // Metas por tipo de crime (mensais)
   const crimeTargets: Record<string, number> = {
@@ -104,8 +67,9 @@ export const Dashboard: React.FC = () => {
     'AISP 43': { total: 0, lethal_violence: 0, street_robbery: 0, vehicle_robbery: 0, cargo_robbery: 0 }
   };
 
-  const fetchData = async () => {
+  const fetchCardData = async () => {
     try {
+      setLoading(true);
       setError(null);
 
       // Buscar metas
@@ -171,6 +135,20 @@ export const Dashboard: React.FC = () => {
         }
       });
 
+      setCardData(unitTotals);
+    } catch (err: any) {
+      console.error('Error fetching card data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchGraphData = async () => {
+    try {
+      // Não setamos loading aqui para evitar o flash da tela
+      setError(null);
+
       // Buscar dados do período para o gráfico
       const endDate = new Date();
       const startDate = new Date();
@@ -206,29 +184,27 @@ export const Dashboard: React.FC = () => {
 
       // Processar crimes do período para o gráfico
       periodCrimes?.forEach((crime: any) => {
+        const date = crime.data_fato?.split('T')[0];
         const unit = crime.aisp;
-        const date = crime.data_fato ? crime.data_fato.split('T')[0] : null;
-        
-        if (date && dateMap[date] && unit) {
+        if (date && unit && dateMap[date]) {
           dateMap[date][unit] = (dateMap[date][unit] || 0) + 1;
         }
       });
 
-      setData({
-        units: unitTotals,
-        timeseries: Object.values(dateMap)
-      });
+      setGraphData(Object.values(dateMap));
     } catch (err: any) {
-      console.error('Erro ao buscar dados:', err);
+      console.error('Error fetching graph data:', err);
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchCardData();
   }, []);
+
+  useEffect(() => {
+    fetchGraphData();
+  }, [timeRange]);
 
   useEffect(() => {
     const fetchTargets = async () => {
@@ -257,107 +233,6 @@ export const Dashboard: React.FC = () => {
 
     fetchTargets();
   }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Buscar dados diretamente da tabela crimes
-        let query = supabase
-          .from('crimes')
-          .select('*');
-
-        const { data: crimes, error: crimesError } = await query.order('data_fato', { ascending: true });
-
-        if (crimesError) {
-          console.error('Erro ao buscar crimes:', crimesError);
-          setError(crimesError.message);
-          return;
-        }
-
-        // Agrupar dados por unidade para os totais
-        const unitData = crimes?.reduce((acc: any, crime: any) => {
-          const unit = crime.aisp;
-          
-          if (!acc[unit]) {
-            acc[unit] = {
-              total: 0,
-              lethal_violence: 0,
-              street_robbery: 0,
-              vehicle_robbery: 0,
-              cargo_robbery: 0
-            };
-          }
-
-          acc[unit].total++;
-
-          const tipo = crime.indicador_estrategico?.toLowerCase() || '';
-          switch (tipo) {
-            case 'letalidade violenta':
-              acc[unit].lethal_violence++;
-              break;
-            case 'roubo de rua':
-              acc[unit].street_robbery++;
-              break;
-            case 'roubo de veículo':
-              acc[unit].vehicle_robbery++;
-              break;
-            case 'roubo de carga':
-              acc[unit].cargo_robbery++;
-              break;
-          }
-
-          return acc;
-        }, {});
-
-        // Calcular data inicial baseado no filtro de período
-        const endDate = new Date();
-        const startDate = new Date();
-        const days = parseInt(timeRange.replace(/[^0-9]/g, ''));
-        startDate.setDate(startDate.getDate() - days);
-
-        // Criar um mapa de datas no intervalo
-        const dateMap: Record<string, any> = {};
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-          const dateStr = currentDate.toISOString().split('T')[0];
-          dateMap[dateStr] = {
-            date: dateStr,
-            'AISP 10': 0,
-            'AISP 28': 0,
-            'AISP 33': 0,
-            'AISP 37': 0,
-            'AISP 43': 0
-          };
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        // Agrupar dados por unidade e data (apenas para o período selecionado)
-        crimes?.forEach((crime: any) => {
-          const unit = crime.aisp;
-          const date = crime.data_fato ? crime.data_fato.split('T')[0] : null;
-          
-          if (date && dateMap[date] && unit) {
-            dateMap[date][unit] = (dateMap[date][unit] || 0) + 1;
-          }
-        });
-
-        setData({
-          units: { ...defaultUnits, ...unitData } || defaultUnits,
-          timeseries: Object.values(dateMap)
-        });
-      } catch (err: any) {
-        console.error('Erro ao buscar dados:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [timeRange]);
 
   const handleClearData = async () => {
     if (window.confirm('Tem certeza que deseja zerar todos os dados? Esta ação não pode ser desfeita.')) {
@@ -388,7 +263,8 @@ export const Dashboard: React.FC = () => {
         if (error) throw error;
 
         // Recarregar dados
-        await fetchData();
+        await fetchCardData();
+        await fetchGraphData();
         
       } catch (err: any) {
         console.error('Erro ao limpar dados:', err);
@@ -416,7 +292,7 @@ export const Dashboard: React.FC = () => {
   }
 
   // Calcular total do CPA
-  const cpaTotal = Object.values(data.units).reduce((sum: number, unit: any) => sum + (unit?.total || 0), 0);
+  const cpaTotal = Object.values(cardData).reduce((sum: number, unit: any) => sum + (unit?.total || 0), 0);
   const cpaTarget = calculateTarget('all');
   const cpaTrend = cpaTotal === 0 ? 0 : ((cpaTotal - cpaTarget) / cpaTarget) * 100;
 
@@ -435,7 +311,8 @@ export const Dashboard: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <ImportButton onImportSuccess={() => {
                       setLoading(true);
-                      fetchData();
+                      fetchCardData();
+                      fetchGraphData();
                     }} />
                     <button
                       onClick={handleClearData}
@@ -468,13 +345,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Letalidade Violenta</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.lethal_violence || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.lethal_violence || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['letalidade violenta'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.lethal_violence || 0), 0) - (targets['RISP 5']?.['letalidade violenta'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.lethal_violence || 0), 0) - (targets['RISP 5']?.['letalidade violenta'] || 0))}
                     </span>
                   </div>
 
@@ -488,13 +365,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Veículo</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.vehicle_robbery || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.vehicle_robbery || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de veículo'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.vehicle_robbery || 0), 0) - (targets['RISP 5']?.['roubo de veículo'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.vehicle_robbery || 0), 0) - (targets['RISP 5']?.['roubo de veículo'] || 0))}
                     </span>
                   </div>
 
@@ -508,13 +385,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Rua</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.street_robbery || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.street_robbery || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de rua'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.street_robbery || 0), 0) - (targets['RISP 5']?.['roubo de rua'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.street_robbery || 0), 0) - (targets['RISP 5']?.['roubo de rua'] || 0))}
                     </span>
                   </div>
 
@@ -528,13 +405,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Carga</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.cargo_robbery || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.cargo_robbery || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de carga'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(data.units).reduce((sum, unit: any) => sum + (unit?.cargo_robbery || 0), 0) - (targets['RISP 5']?.['roubo de carga'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.cargo_robbery || 0), 0) - (targets['RISP 5']?.['roubo de carga'] || 0))}
                     </span>
                   </div>
                 </div>
@@ -543,7 +420,7 @@ export const Dashboard: React.FC = () => {
 
             {/* Battalion Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-              {Object.entries(data.units)
+              {Object.entries(cardData)
                 .filter(([unit]) => unit !== 'null' && unit !== null)
                 .map(([unit, stats]: [string, any]) => (
                 <Link
@@ -599,11 +476,11 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Time Series Chart */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
+            <div ref={chartRef} className="bg-white p-6 rounded-lg shadow-lg relative">
               <div className="mb-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold">Evolução por Batalhão</h2>
-                  <div>
+                  <div className="sticky top-4 z-10 bg-white p-2 rounded-lg shadow-md">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Período do Gráfico
                     </label>
@@ -616,7 +493,7 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data.timeseries}>
+                  <LineChart data={graphData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
                       dataKey="date" 

@@ -26,7 +26,10 @@ export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({ value, onC
               ? 'bg-blue-600 text-white'
               : 'bg-white text-gray-600 hover:bg-gray-100'
           }`}
-          onClick={() => onChange(range.value)}
+          onClick={(e) => {
+            e.preventDefault();
+            onChange(range.value);
+          }}
         >
           {range.label}
         </button>
