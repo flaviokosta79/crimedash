@@ -7,21 +7,28 @@ interface TimeRangeSelectorProps {
 }
 
 export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({ value, onChange }) => {
-  const ranges: TimeRange[] = ['D', 'W', 'M', '6M', 'Y'];
+  const ranges: Array<{ value: TimeRange; label: string }> = [
+    { value: '7D', label: '7 dias' },
+    { value: '15D', label: '15 dias' },
+    { value: '30D', label: '30 dias' },
+    { value: '90D', label: '90 dias' },
+    { value: '180D', label: '6 meses' },
+    { value: '1Y', label: '1 ano' }
+  ];
 
   return (
-    <div className="flex space-x-2 bg-white rounded-lg p-1 shadow">
+    <div className="flex flex-wrap gap-2">
       {ranges.map((range) => (
         <button
-          key={range}
-          className={`px-4 py-2 rounded-md ${
-            value === range
+          key={range.value}
+          className={`px-4 py-2 rounded-md transition-colors ${
+            value === range.value
               ? 'bg-blue-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
+              : 'bg-white text-gray-600 hover:bg-gray-100'
           }`}
-          onClick={() => onChange(range)}
+          onClick={() => onChange(range.value)}
         >
-          {range}
+          {range.label}
         </button>
       ))}
     </div>

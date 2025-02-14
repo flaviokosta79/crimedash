@@ -1,18 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { CrimeData } from '../types';
-
-// Cliente normal para operações de leitura
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
-
-// Cliente com service_role para importação
-const supabaseAdmin = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
-);
+import { supabase, getSupabaseAdmin } from '../config/supabase';
 
 interface XLSXRow {
   'objectid': string;
@@ -40,7 +29,7 @@ export const crimeService = {
       
       // Limpar dados existentes
       console.log('Limpando dados existentes...');
-      const { error: deleteError } = await supabaseAdmin
+      const { error: deleteError } = await getSupabaseAdmin()
         .from('crimes')
         .delete()
         .neq('seq', 0); // usando neq para garantir que a query afete todas as linhas
@@ -51,7 +40,7 @@ export const crimeService = {
       }
 
       // Limpar série temporal
-      const { error: deleteTimeseriesError } = await supabaseAdmin
+      const { error: deleteTimeseriesError } = await getSupabaseAdmin()
         .from('crime_timeseries')
         .delete()
         .neq('count', -1); // usando neq para garantir que a query afete todas as linhas
@@ -81,15 +70,15 @@ export const crimeService = {
       const crimes = jsonData.map((row, index) => {
         try {
           // Depois (código correto)
-          const dia = String(row['Dia do fato']).padStart(2, '0');
-          const mes = String(row['Mês do fato']).padStart(2, '0');
-          const ano = row['Ano do fato'];
-          const data_fato = `${ano}-${mes}-${dia}`
+          const dia = String(row['Dia do registro']).padStart(2, '0');
+          const mes = String(row['Mês do registro']).padStart(2, '0');
+          const ano = row['Ano do registro'];
+          const data_fato = ano && mes && dia ? `${ano}-${mes}-${dia}` : null;
 
           // Converter hora_fato para formato HH:MM:SS
           const faixaHoraria = row['Faixa horária'] || '';
           const horaInicio = faixaHoraria.split('h')[0];
-          const hora_fato = `${horaInicio.padStart(2, '0')}:00:00`;
+          const hora_fato = horaInicio ? `${horaInicio.padStart(2, '0')}:00:00` : null;
 
           // Limpar e validar campos de texto
           const cleanText = (text: string | number | undefined) => {
@@ -135,7 +124,7 @@ export const crimeService = {
         const batch = crimes.slice(i, i + batchSize);
         console.log(`Inserindo lote ${i/batchSize + 1}:`, batch.length, 'registros');
         
-        const { error } = await supabaseAdmin
+        const { error } = await getSupabaseAdmin()
           .from('crimes')
           .insert(batch);
 
@@ -174,7 +163,7 @@ export const crimeService = {
         const batch = timeseries.slice(i, i + batchSize);
         console.log(`Inserindo lote de série temporal ${i/batchSize + 1}:`, batch.length, 'registros');
         
-        const { error: timeseriesError } = await supabaseAdmin
+        const { error: timeseriesError } = await getSupabaseAdmin()
           .from('crime_timeseries')
           .insert(batch);
 
@@ -185,7 +174,7 @@ export const crimeService = {
       }
 
       // Atualizar a view materializada
-      const { error: refreshError } = await supabaseAdmin
+      const { error: refreshError } = await getSupabaseAdmin()
         .rpc('refresh_mv_unit_totals');
 
       if (refreshError) {

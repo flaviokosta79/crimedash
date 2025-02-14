@@ -23,8 +23,8 @@ export const Targets: React.FC = () => {
 
   const crimeTypes = [
     'letalidade violenta',
-    'roubo de rua',
     'roubo de veículo',
+    'roubo de rua',
     'roubo de carga'
   ];
 
@@ -32,6 +32,26 @@ export const Targets: React.FC = () => {
     { type: 'AISP', numbers: ['10', '28', '33', '37', '43'] },
     { type: 'RISP', numbers: ['5'] }
   ];
+
+  // Mapeamento dos ícones por tipo de crime
+  const crimeIcons: Record<string, string> = {
+    'letalidade violenta': '/images/icons/letalidade.svg',
+    'roubo de veículo': '/images/icons/rouboveiculo.svg',
+    'roubo de rua': '/images/icons/rouborua.svg',
+    'roubo de carga': '/images/icons/roubocarga.svg'
+  };
+
+  // Função para ordenar os tipos de crime
+  const sortCrimeTypes = (targets: Target[]) => {
+    return targets.sort((a, b) => {
+      const indexA = crimeTypes.indexOf(a.crime_type);
+      const indexB = crimeTypes.indexOf(b.crime_type);
+      if (indexA === indexB) {
+        return a.unit.localeCompare(b.unit);
+      }
+      return indexA - indexB;
+    });
+  };
 
   useEffect(() => {
     fetchTargets();
@@ -47,12 +67,12 @@ export const Targets: React.FC = () => {
         .select('*')
         .eq('year', 2025)
         .eq('semester', 1)
-        .order('unit')
-        .order('crime_type');
+        .order('unit');
 
       if (error) throw error;
 
-      setTargets(data || []);
+      // Ordenar os dados pelos tipos de crime na ordem definida
+      setTargets(sortCrimeTypes(data || []));
     } catch (error: any) {
       console.error('Erro ao buscar metas:', error);
       setError(error.message);
@@ -184,7 +204,14 @@ export const Targets: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                       {unitTargets.map((target) => (
                         <div key={target.id} className="flex items-center justify-between bg-gray-700 p-4 rounded">
-                          <span className="capitalize text-lg">{target.crime_type}</span>
+                          <div className="flex items-center gap-2">
+                            <img 
+                              src={crimeIcons[target.crime_type]} 
+                              alt={target.crime_type}
+                              className="w-6 h-6"
+                            />
+                            <span className="capitalize text-lg">{target.crime_type}</span>
+                          </div>
                           {editingTarget?.id === target.id ? (
                             <div className="flex items-center gap-2">
                               <input
@@ -252,7 +279,14 @@ export const Targets: React.FC = () => {
                       <div className="space-y-4">
                         {unitTargets.map((target) => (
                           <div key={target.id} className="flex items-center justify-between">
-                            <span className="capitalize">{target.crime_type}</span>
+                            <div className="flex items-center gap-2">
+                              <img 
+                                src={crimeIcons[target.crime_type]} 
+                                alt={target.crime_type}
+                                className="w-6 h-6"
+                              />
+                              <span className="capitalize">{target.crime_type}</span>
+                            </div>
                             {editingTarget?.id === target.id ? (
                               <div className="flex items-center gap-2">
                                 <input

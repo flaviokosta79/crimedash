@@ -11,8 +11,16 @@ export type CrimeType =
   | 'Roubo de Rua'
   | 'Roubo de Carga';
 
+export type TimeRange = 
+  | '7D'  // Últimos 7 dias
+  | '15D' // Últimos 15 dias
+  | '30D' // Últimos 30 dias
+  | '90D' // Últimos 90 dias
+  | '180D' // Últimos 180 dias
+  | '1Y';  // Último ano
+
 export interface Filters {
-  timeRange: string;
+  timeRange: TimeRange;
   unit: PoliceUnit | '';
 }
 
