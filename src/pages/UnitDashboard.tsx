@@ -803,6 +803,9 @@ export const UnitDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      <p className="mt-4 text-center text-sm text-gray-600">
+        Feito por Flavio Costa
+      </p>
     </div>
   );
 };
