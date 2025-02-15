@@ -8,7 +8,7 @@ import {
 import { ArrowLeft } from 'lucide-react';
 import { CrimeMap } from '../components/CrimeMap';
 import type { CrimeData, CrimeType, PoliceUnit } from '../types';
-import { supabase } from '../config/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 
 // Define as cores para cada tipo de crime (usado em todos os gráficos)
 const CRIME_COLORS = {
@@ -338,47 +338,35 @@ export const UnitDashboard: React.FC = () => {
     vehicle_robbery: 0,
     cargo_robbery: 0
   });
-  const [targets, setTargets] = useState<Record<string, number>>({
-    'Letalidade Violenta': 0,
-    'Roubo de Veículo': 0,
-    'Roubo de Rua': 0,
-    'Roubo de Carga': 0
+  const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
+  const [cardData, setCardData] = useState({
+    letalidadeViolenta: 0,
+    rouboDeVeiculo: 0,
+    rouboDeRua: 0,
+    rouboDeCarga: 0
   });
 
   useEffect(() => {
     const fetchTargets = async () => {
-      const { data: targetsData, error } = await supabase
+      const { data: targetsData, error } = await supabaseAdmin
         .from('targets')
         .select('*')
-        .eq('unit', unit);
+        .eq('unit', unit)
+        .eq('year', new Date().getFullYear())
+        .eq('semester', new Date().getMonth() < 6 ? 1 : 2);
 
       if (error) {
         console.error('Erro ao buscar metas:', error);
         return;
       }
 
-      const targetMap: Record<string, number> = {
-        'Letalidade Violenta': 0,
-        'Roubo de Veículo': 0,
-        'Roubo de Rua': 0,
-        'Roubo de Carga': 0
-      };
+      const targetMap: Record<string, Record<string, number>> = {};
+      if (!targetMap[unit as string]) {
+        targetMap[unit as string] = {};
+      }
 
       targetsData?.forEach((target) => {
-        switch (target.crime_type.toLowerCase()) {
-          case 'letalidade violenta':
-            targetMap['Letalidade Violenta'] = target.target_value;
-            break;
-          case 'roubo de veículo':
-            targetMap['Roubo de Veículo'] = target.target_value;
-            break;
-          case 'roubo de rua':
-            targetMap['Roubo de Rua'] = target.target_value;
-            break;
-          case 'roubo de carga':
-            targetMap['Roubo de Carga'] = target.target_value;
-            break;
-        }
+        targetMap[unit as string][target.crime_type.toLowerCase()] = target.target_value;
       });
 
       setTargets(targetMap);
@@ -400,49 +388,48 @@ export const UnitDashboard: React.FC = () => {
     setLoading(true);
 
     try {
-      const { data: crimes, error } = await supabase
+      // Buscar todos os crimes da unidade sem filtro de data
+      const { data: crimes, error } = await supabaseAdmin
         .from('crimes')
         .select('*')
-        .eq('aisp', unit)
-        .order('data_fato', { ascending: false });
+        .eq('aisp', unit);
 
       if (error) {
         setError('Erro ao buscar crimes: ' + error.message);
         return;
       }
 
-      const newUnitData = {
-        total: 0,
-        lethal_violence: 0,
-        street_robbery: 0,
-        vehicle_robbery: 0,
-        cargo_robbery: 0
+      // Inicializa contadores
+      const newCardData = {
+        letalidadeViolenta: 0,
+        rouboDeVeiculo: 0,
+        rouboDeRua: 0,
+        rouboDeCarga: 0
       };
 
+      // Conta os crimes usando a mesma lógica do Dashboard
       crimes?.forEach((crime: any) => {
-        newUnitData.total++;
-        const tipo = crime.indicador_estrategico?.toLowerCase() || '';
-
-        switch (tipo) {
-          case 'letalidade violenta':
-            newUnitData.lethal_violence++;
-            break;
-          case 'roubo de rua':
-            newUnitData.street_robbery++;
-            break;
-          case 'roubo de veículo':
-            newUnitData.vehicle_robbery++;
-            break;
-          case 'roubo de carga':
-            newUnitData.cargo_robbery++;
-            break;
+        const indicator = crime.indicador_estrategico?.toLowerCase() || '';
+        
+        // Incrementar contadores específicos usando includes como no Dashboard
+        if (indicator.includes('letalidade')) {
+          newCardData.letalidadeViolenta += 1;
+        }
+        if (indicator.includes('roubo de rua')) {
+          newCardData.rouboDeRua += 1;
+        }
+        if (indicator.includes('roubo de veículo')) {
+          newCardData.rouboDeVeiculo += 1;
+        }
+        if (indicator.includes('roubo de carga')) {
+          newCardData.rouboDeCarga += 1;
         }
       });
 
+      setCardData(newCardData);
       setCrimes(crimes || []);
       const mapDataGenerated = generateHeatMapData(unit, crimes || []);
       setMapData(mapDataGenerated);
-      setUnitData(newUnitData);
     } catch (error: any) {
       setError('Erro ao carregar dados: ' + error.message);
     } finally {
@@ -510,27 +497,27 @@ export const UnitDashboard: React.FC = () => {
   const crimeMetrics = [
     {
       name: 'Letalidade Violenta',
-      atual: unitData.lethal_violence,
-      meta: targets['Letalidade Violenta']
+      atual: cardData.letalidadeViolenta,
+      meta: targets[unit as string]?.['letalidade violenta'] || 0
     },
     {
       name: 'Roubo de Veículo',
-      atual: unitData.vehicle_robbery,
-      meta: targets['Roubo de Veículo']
+      atual: cardData.rouboDeVeiculo,
+      meta: targets[unit as string]?.['roubo de veículo'] || 0
     },
     {
       name: 'Roubo de Rua',
-      atual: unitData.street_robbery,
-      meta: targets['Roubo de Rua']
+      atual: cardData.rouboDeRua,
+      meta: targets[unit as string]?.['roubo de rua'] || 0
     },
     {
       name: 'Roubo de Carga',
-      atual: unitData.cargo_robbery,
-      meta: targets['Roubo de Carga']
+      atual: cardData.rouboDeCarga,
+      meta: targets[unit as string]?.['roubo de carga'] || 0
     }
   ];
 
-  const { data: timeSeriesData, cardData } = generateTimeSeriesData(timeRange, unit || '', []);
+  const { data: timeSeriesData, cardData: timeSeriesCardData } = generateTimeSeriesData(timeRange, unit || '', []);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -565,19 +552,26 @@ export const UnitDashboard: React.FC = () => {
                   <div>
                     <p className="text-xs text-gray-600">Atual</p>
                     <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Letalidade Violenta'] }}>
-                      {unitData.lethal_violence}
+                      {cardData.letalidadeViolenta}
                     </p>
                   </div>
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-xs text-gray-600">Meta</p>
-                      <p className="text-lg font-semibold text-gray-700">{targets['Letalidade Violenta']}</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets[unit as string]?.['letalidade violenta'] || 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Diferença</p>
-                      <p className={`text-lg font-semibold ${unitData.lethal_violence > targets['Letalidade Violenta'] ? 'text-red-600' : 'text-green-600'}`}>
-                        {unitData.lethal_violence > targets['Letalidade Violenta'] ? '+' : ''}{unitData.lethal_violence - targets['Letalidade Violenta']}
-                      </p>
+                      {(() => {
+                        const diff = cardData.letalidadeViolenta - (targets[unit as string]?.['letalidade violenta'] || 0);
+                        const colorClass = diff <= 0 ? 'text-green-600' : 'text-red-600';
+                        const sign = diff <= 0 ? '' : '+';
+                        return (
+                          <p className={`text-lg font-semibold ${colorClass}`}>
+                            {sign}{diff}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -595,19 +589,26 @@ export const UnitDashboard: React.FC = () => {
                   <div>
                     <p className="text-xs text-gray-600">Atual</p>
                     <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Roubo de Veículo'] }}>
-                      {unitData.vehicle_robbery}
+                      {cardData.rouboDeVeiculo}
                     </p>
                   </div>
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-xs text-gray-600">Meta</p>
-                      <p className="text-lg font-semibold text-gray-700">{targets['Roubo de Veículo']}</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets[unit as string]?.['roubo de veículo'] || 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Diferença</p>
-                      <p className={`text-lg font-semibold ${unitData.vehicle_robbery > targets['Roubo de Veículo'] ? 'text-red-600' : 'text-green-600'}`}>
-                        {unitData.vehicle_robbery > targets['Roubo de Veículo'] ? '+' : ''}{unitData.vehicle_robbery - targets['Roubo de Veículo']}
-                      </p>
+                      {(() => {
+                        const diff = cardData.rouboDeVeiculo - (targets[unit as string]?.['roubo de veículo'] || 0);
+                        const colorClass = diff <= 0 ? 'text-green-600' : 'text-red-600';
+                        const sign = diff <= 0 ? '' : '+';
+                        return (
+                          <p className={`text-lg font-semibold ${colorClass}`}>
+                            {sign}{diff}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -625,19 +626,26 @@ export const UnitDashboard: React.FC = () => {
                   <div>
                     <p className="text-xs text-gray-600">Atual</p>
                     <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Roubo de Rua'] }}>
-                      {unitData.street_robbery}
+                      {cardData.rouboDeRua}
                     </p>
                   </div>
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-xs text-gray-600">Meta</p>
-                      <p className="text-lg font-semibold text-gray-700">{targets['Roubo de Rua']}</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets[unit as string]?.['roubo de rua'] || 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Diferença</p>
-                      <p className={`text-lg font-semibold ${unitData.street_robbery > targets['Roubo de Rua'] ? 'text-red-600' : 'text-green-600'}`}>
-                        {unitData.street_robbery > targets['Roubo de Rua'] ? '+' : ''}{unitData.street_robbery - targets['Roubo de Rua']}
-                      </p>
+                      {(() => {
+                        const diff = cardData.rouboDeRua - (targets[unit as string]?.['roubo de rua'] || 0);
+                        const colorClass = diff <= 0 ? 'text-green-600' : 'text-red-600';
+                        const sign = diff <= 0 ? '' : '+';
+                        return (
+                          <p className={`text-lg font-semibold ${colorClass}`}>
+                            {sign}{diff}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -655,19 +663,26 @@ export const UnitDashboard: React.FC = () => {
                   <div>
                     <p className="text-xs text-gray-600">Atual</p>
                     <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Roubo de Carga'] }}>
-                      {unitData.cargo_robbery}
+                      {cardData.rouboDeCarga}
                     </p>
                   </div>
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-xs text-gray-600">Meta</p>
-                      <p className="text-lg font-semibold text-gray-700">{targets['Roubo de Carga']}</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets[unit as string]?.['roubo de carga'] || 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Diferença</p>
-                      <p className={`text-lg font-semibold ${unitData.cargo_robbery > targets['Roubo de Carga'] ? 'text-red-600' : 'text-green-600'}`}>
-                        {unitData.cargo_robbery > targets['Roubo de Carga'] ? '+' : ''}{unitData.cargo_robbery - targets['Roubo de Carga']}
-                      </p>
+                      {(() => {
+                        const diff = cardData.rouboDeCarga - (targets[unit as string]?.['roubo de carga'] || 0);
+                        const colorClass = diff <= 0 ? 'text-green-600' : 'text-red-600';
+                        const sign = diff <= 0 ? '' : '+';
+                        return (
+                          <p className={`text-lg font-semibold ${colorClass}`}>
+                            {sign}{diff}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

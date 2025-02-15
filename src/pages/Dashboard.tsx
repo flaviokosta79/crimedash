@@ -11,6 +11,7 @@ import type { PoliceUnit } from '../types';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { FiUpload, FiTrash2, FiSettings, FiLogOut, FiUsers } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import { crimeService } from '../services/crimeService';
 
 interface DashboardData {
   units: Record<string, {
@@ -39,6 +40,7 @@ export const Dashboard: React.FC = () => {
   const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
   const navigate = useNavigate();
   const chartRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const battalionColors: Record<PoliceUnit, string> = {
     'AISP 10': 'bg-blue-600',
@@ -46,6 +48,22 @@ export const Dashboard: React.FC = () => {
     'AISP 33': 'bg-green-600',
     'AISP 37': 'bg-red-600',
     'AISP 43': 'bg-purple-600'
+  };
+
+  const graphColors: Record<PoliceUnit, string> = {
+    'AISP 10': '#1f77b4',
+    'AISP 28': '#ff7f0e',
+    'AISP 33': '#2ca02c',
+    'AISP 37': '#d62728',
+    'AISP 43': '#9467bd'
+  };
+
+  const textColors: Record<PoliceUnit, string> = {
+    'AISP 10': 'text-blue-600',
+    'AISP 28': 'text-orange-600',
+    'AISP 33': 'text-green-600',
+    'AISP 37': 'text-red-600',
+    'AISP 43': 'text-purple-600'
   };
 
   const defaultUnits = {
@@ -106,29 +124,8 @@ export const Dashboard: React.FC = () => {
       setCardData(unitTotals);
 
       // Buscar metas
-      const { data: targetsData, error: targetsError } = await supabase
-        .from('targets')
-        .select('*')
-        .eq('year', 2025)
-        .eq('semester', 1)
-        .in('unit', ['RISP 5', 'AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43']); // Buscando metas de todas as unidades
+      await fetchTargets();
 
-      if (targetsError) throw targetsError;
-
-      console.log('Metas recebidas:', targetsData); // Para debug
-
-      // Processar metas por unidade
-      const targetsByUnit: Record<string, Record<string, number>> = {};
-      targetsData?.forEach((target) => {
-        if (!targetsByUnit[target.unit]) {
-          targetsByUnit[target.unit] = {};
-        }
-        targetsByUnit[target.unit][target.crime_type] = target.target_value;
-      });
-
-      console.log('Metas processadas:', targetsByUnit); // Para debug
-
-      setTargets(targetsByUnit);
     } catch (err: any) {
       console.error('Error fetching card data:', err);
       setError(err.message);
@@ -141,10 +138,9 @@ export const Dashboard: React.FC = () => {
     try {
       setError(null);
 
-      // Calcular datas baseado no timeRange
-      const endDate = new Date();
       const startDate = new Date();
-      
+      const endDate = new Date();
+
       switch (timeRange) {
         case '7D':
           startDate.setDate(endDate.getDate() - 7);
@@ -159,17 +155,16 @@ export const Dashboard: React.FC = () => {
           startDate.setDate(endDate.getDate() - 30);
       }
 
-      const { data: crimes, error } = await supabaseAdmin
+      const { data: crimeData, error: crimeError } = await supabase
         .from('crimes')
         .select('*')
-        .gte('data_fato', startDate.toISOString().split('T')[0])
-        .lte('data_fato', endDate.toISOString().split('T')[0])
+        .gte('data_fato', startDate.toISOString())
+        .lte('data_fato', endDate.toISOString())
         .order('data_fato', { ascending: true });
 
-      if (error) throw error;
+      if (crimeError) throw crimeError;
 
-      // Processar dados para o gráfico
-      const processedData = processGraphData(crimes || []);
+      const processedData = processTimeSeriesData(crimeData || []);
       setGraphData(processedData);
     } catch (err: any) {
       console.error('Error fetching graph data:', err);
@@ -177,12 +172,12 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const processGraphData = (crimes: any[]) => {
-    // Criar mapa de datas para o gráfico
-    const dateMap: Record<string, any> = {};
-    const currentDate = new Date();
-    const endDate = new Date();
+  const processTimeSeriesData = (data: any[]) => {
+    // Criar um mapa de datas com todos os dias no período
+    const dateMap: { [key: string]: any } = {};
     const startDate = new Date();
+    const endDate = new Date();
+
     switch (timeRange) {
       case '7D':
         startDate.setDate(endDate.getDate() - 7);
@@ -196,7 +191,10 @@ export const Dashboard: React.FC = () => {
       default:
         startDate.setDate(endDate.getDate() - 30);
     }
-    while (currentDate >= startDate) {
+
+    // Inicializar todos os dias no período com valores zerados
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       dateMap[dateStr] = {
         date: dateStr,
@@ -206,23 +204,70 @@ export const Dashboard: React.FC = () => {
         'AISP 37': 0,
         'AISP 43': 0
       };
-      currentDate.setDate(currentDate.getDate() - 1);
+      currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Processar crimes do período para o gráfico
-    crimes?.forEach((crime: any) => {
-      const date = crime.data_fato?.split('T')[0];
-      const unit = crime.aisp;
-      if (date && unit && dateMap[date]) {
-        dateMap[date][unit] = (dateMap[date][unit] || 0) + 1;
+    // Preencher com os dados reais de crimes
+    data.forEach((item) => {
+      const date = item.data_fato.split('T')[0];
+      if (dateMap[date]) {
+        dateMap[date][item.aisp] = (dateMap[date][item.aisp] || 0) + 1;
       }
     });
 
-    return Object.values(dateMap);
+    // Retornar array ordenado por data
+    return Object.values(dateMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
   const handleImportSuccess = () => {
     fetchCardData();
+  };
+
+  const fetchTargets = async () => {
+    try {
+      const { data: targetsData, error } = await supabaseAdmin
+        .from('targets')
+        .select('*')
+        .eq('year', new Date().getFullYear())
+        .eq('semester', new Date().getMonth() < 6 ? 1 : 2);
+
+      if (error) {
+        setError('Erro ao buscar metas: ' + error.message);
+        return;
+      }
+
+      const targetsByUnit: Record<string, Record<string, number>> = {};
+
+      targetsData?.forEach((target) => {
+        if (!targetsByUnit[target.unit]) {
+          targetsByUnit[target.unit] = {};
+        }
+        targetsByUnit[target.unit][target.crime_type.toLowerCase()] = target.target_value;
+      });
+
+      setTargets(targetsByUnit);
+    } catch (err: any) {
+      toast.error('Erro ao carregar metas: ' + err.message);
+    }
+  };
+
+  const handleClearData = async () => {
+    if (window.confirm('Tem certeza que deseja limpar todos os dados? Esta ação não pode ser desfeita.')) {
+      try {
+        const { error } = await supabaseAdmin
+          .from('crimes')
+          .delete()
+          .neq('id', 0);
+
+        if (error) throw error;
+
+        await fetchCardData();
+        await fetchGraphData();
+        toast.success('Dados limpos com sucesso!');
+      } catch (error: any) {
+        toast.error(`Erro ao limpar dados: ${error.message}`);
+      }
+    }
   };
 
   useEffect(() => {
@@ -236,36 +281,16 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchCardData();
-  }, []);
-
-  useEffect(() => {
-    fetchGraphData();
-  }, [timeRange]);
-
-  const handleClearData = async () => {
-    if (window.confirm('Tem certeza que deseja zerar todos os dados? Esta ação não pode ser desfeita.')) {
+    const loadData = async () => {
       try {
-        setLoading(true);
-        const { error } = await supabaseAdmin
-          .from('crimes')
-          .delete()
-          .neq('id', 0);
-
-        if (error) throw error;
-
-        // Recarregar dados
         await fetchCardData();
         await fetchGraphData();
-        
       } catch (err: any) {
-        console.error('Erro ao limpar dados:', err);
         setError(err.message);
-      } finally {
-        setLoading(false);
       }
-    }
-  };
+    };
+    loadData();
+  }, [timeRange]);
 
   const handleLogout = async () => {
     try {
@@ -321,41 +346,58 @@ export const Dashboard: React.FC = () => {
                       <>
                         <button
                           onClick={() => navigate('/users')}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
-                          <FiUsers className="mr-2 h-5 w-5" />
-                          Gerenciar Usuários
+                          <FiUsers size={16} />
+                          Usuários
                         </button>
                         <button
                           onClick={() => fileInputRef.current?.click()}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                         >
-                          <FiUpload className="mr-2 h-5 w-5" />
+                          <FiUpload size={16} />
                           Importar Dados
                         </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".xlsx"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              try {
+                                await crimeService.importXLSX(file);
+                                fetchCardData();
+                                fetchGraphData();
+                                alert('Dados importados com sucesso!');
+                              } catch (error) {
+                                console.error('Erro ao importar arquivo:', error);
+                                alert('Erro ao importar arquivo. Verifique o console para mais detalhes.');
+                              } finally {
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = '';
+                                }
+                              }
+                            }
+                          }}
+                          className="hidden"
+                        />
                         <button
                           onClick={handleClearData}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                         >
-                          <FiTrash2 className="mr-2 h-5 w-5" />
+                          <FiTrash2 size={16} />
                           Limpar Dados
                         </button>
-                        <Link
-                          to="/targets"
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                         >
-                          <FiSettings className="mr-2 h-5 w-5" />
-                          Metas
-                        </Link>
+                          <FiLogOut size={16} />
+                          Sair
+                        </button>
                       </>
                     )}
-                    <button
-                      onClick={handleLogout}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <FiLogOut className="mr-2 h-5 w-5" />
-                      Sair
-                    </button>
                   </div>
                 </div>
 
@@ -521,23 +563,44 @@ export const Dashboard: React.FC = () => {
                         const [year, month, day] = date.split('-');
                         return `${day}/${month}`;
                       }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
                     />
                     <YAxis />
-                    <Tooltip />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const date = new Date(label);
+                          date.setHours(date.getHours() + 3);
+                          const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                          return (
+                            <div className="bg-white p-4 border border-gray-200 rounded shadow-lg min-w-[200px]">
+                              <div className="text-base font-bold text-gray-700 mb-2">{formattedDate}</div>
+                              {payload.map((pld, index) => {
+                                const textColor = textColors[pld.name as PoliceUnit] || 'text-gray-600';
+                                return (
+                                  <div key={index} className="text-base mb-1 flex justify-between">
+                                    <span className={`font-medium ${textColor}`}>{pld.name}</span>
+                                    <span className="text-gray-600">{pld.value}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
                     <Legend />
-                    {Object.keys(battalionColors).map((battalion) => (
+                    {Object.keys(graphColors).map((battalion) => (
                       <Line
                         key={battalion}
                         type="monotone"
                         dataKey={battalion}
                         name={battalion}
-                        stroke={
-                          battalion === 'AISP 10' ? '#1f77b4' :
-                          battalion === 'AISP 28' ? '#ff7f0e' :
-                          battalion === 'AISP 33' ? '#2ca02c' :
-                          battalion === 'AISP 37' ? '#d62728' :
-                          '#9467bd'
-                        }
+                        stroke={graphColors[battalion as PoliceUnit]}
+                        activeDot={{ r: 8 }}
                         strokeWidth={2}
                       />
                     ))}

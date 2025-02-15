@@ -85,7 +85,6 @@ export function Targets() {
       // Ordenar os dados pelos tipos de crime na ordem definida
       setTargets(sortCrimeTypes(data || []));
     } catch (error: any) {
-      console.error('Erro ao buscar metas:', error);
       setError(error.message);
       toast.error('Erro ao carregar as metas');
     } finally {
@@ -98,9 +97,6 @@ export function Targets() {
       setLoading(true);
       setError(null);
       
-      console.log('Atualizando meta:', target);
-      
-      // Primeiro, tenta atualizar
       const { error: updateError } = await supabase
         .from('targets')
         .update({ 
@@ -110,11 +106,10 @@ export function Targets() {
         .eq('id', target.id);
 
       if (updateError) {
-        console.error('Erro ao atualizar:', updateError);
+        setError(updateError.message);
         throw updateError;
       }
 
-      // Depois, busca o registro atualizado
       const { data: updatedData, error: selectError } = await supabase
         .from('targets')
         .select('*')
@@ -122,12 +117,11 @@ export function Targets() {
         .single();
 
       if (selectError) {
-        console.error('Erro ao buscar dado atualizado:', selectError);
+        setError(selectError.message);
         throw selectError;
       }
 
       if (updatedData) {
-        console.log('Dado atualizado:', updatedData);
         setTargets(prevTargets => 
           prevTargets.map(t => t.id === target.id ? updatedData : t)
         );
@@ -137,7 +131,6 @@ export function Targets() {
         throw new Error('Registro não encontrado após atualização');
       }
     } catch (error: any) {
-      console.error('Erro ao atualizar meta:', error);
       setError(error.message);
       toast.error(`Erro ao atualizar a meta: ${error.message}`);
     } finally {

@@ -7,7 +7,6 @@ import { Targets } from './pages/Targets';
 import { UserManagement } from './pages/UserManagement';
 import { UnitDashboard } from './pages/UnitDashboard';
 import { PrivateRoute } from './components/PrivateRoute';
-import { SupabaseDebug } from './components/SupabaseDebug';
 
 function App() {
   return (
@@ -48,9 +47,6 @@ function App() {
         {/* Qualquer outra rota redireciona para login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-
-      {/* Componente de Debug */}
-      <SupabaseDebug />
     </Router>
   );
 }

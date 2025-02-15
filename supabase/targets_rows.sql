@@ -1,0 +1,1 @@
+INSERT INTO "public"."targets" ("id", "unit", "crime_type", "target_value", "year", "semester", "created_at", "updated_at") VALUES ('1', 'RISP 5', 'letalidade violenta', '48', '2025', '1', '2025-02-12 23:18:55.098566+00', '2025-02-15 19:32:59.267282+00');
