@@ -414,7 +414,6 @@ const { data: crimeData, error: crimeError } = await supabase
 
 ### Como é feita a consulta no banco de dados?
 
-No Dashboard, a busca é feita de forma diferente:
 
 ## No Dashboard:
 ## typescript

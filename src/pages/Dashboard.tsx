@@ -74,9 +74,8 @@ export const Dashboard: React.FC = () => {
     'AISP 43': { total: 0, letalidadeViolenta: 0, rouboDeRua: 0, rouboDeVeiculo: 0, rouboDeCarga: 0 }
   };
 
-  const fetchCardData = async () => {
+  const fetchGraphData = async () => {
     try {
-      setLoading(true);
       setError(null);
       
       const { data: allCrimes, error } = await supabaseAdmin
@@ -85,94 +84,57 @@ export const Dashboard: React.FC = () => {
 
       if (error) throw error;
 
-      // Inicializar contadores por unidade
-      const unitTotals: Record<string, any> = {};
-      ['AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43'].forEach(unit => {
-        unitTotals[unit] = {
-          total: 0,
-          letalidadeViolenta: 0,
-          rouboDeRua: 0,
-          rouboDeVeiculo: 0,
-          rouboDeCarga: 0
-        };
-      });
+      const processedData = processGraphData(allCrimes, timeRange);
+      setGraphData(processedData);
+    } catch (error: any) {
+      console.error('Erro ao buscar dados do gráfico:', error);
+      setError(error.message);
+    }
+  };
 
-      // Processar todos os crimes para os totais
-      allCrimes?.forEach((crime: any) => {
-        const unit = crime.aisp;
-        const indicator = crime.indicador_estrategico?.toLowerCase() || '';
-        
-        if (unit && unitTotals[unit]) {
-          unitTotals[unit].total += 1;
+  const processTargets = (data: any[]) => {
+    const targetsByUnit: Record<string, Record<string, number>> = {};
+    
+    data.forEach((target: any) => {
+      if (!targetsByUnit[target.unit]) {
+        targetsByUnit[target.unit] = {};
+      }
+      // Corrigido de target.indicator para target.crime_type e target.value para target.target_value
+      targetsByUnit[target.unit][target.crime_type] = target.target_value;
+    });
+    
+    return targetsByUnit;
+  };
 
-          // Incrementar contadores específicos
-          if (indicator.includes('letalidade')) {
-            unitTotals[unit].letalidadeViolenta += 1;
-          }
-          if (indicator.includes('roubo de rua')) {
-            unitTotals[unit].rouboDeRua += 1;
-          }
-          if (indicator.includes('roubo de veículo')) {
-            unitTotals[unit].rouboDeVeiculo += 1;
-          }
-          if (indicator.includes('roubo de carga')) {
-            unitTotals[unit].rouboDeCarga += 1;
-          }
-        }
-      });
+  const fetchCardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Buscar crimes e metas em paralelo para melhor performance
+      const [crimesResponse, targetsResponse] = await Promise.all([
+        supabaseAdmin.from('crimes').select('*'),
+        supabaseAdmin.from('targets').select('*')
+      ]);
 
-      setCardData(unitTotals);
+      if (crimesResponse.error) throw crimesResponse.error;
+      if (targetsResponse.error) throw targetsResponse.error;
 
-      // Buscar metas
-      await fetchTargets();
-
-    } catch (err: any) {
-      console.error('Error fetching card data:', err);
-      setError(err.message);
+      const processedData = processCardData(crimesResponse.data);
+      setCardData(processedData);
+      
+      // Processar e setar as metas
+      const processedTargets = processTargets(targetsResponse.data);
+      setTargets(processedTargets);
+    } catch (error: any) {
+      console.error('Erro ao buscar dados dos cards:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchGraphData = async () => {
-    try {
-      setError(null);
-
-      const startDate = new Date();
-      const endDate = new Date();
-
-      switch (timeRange) {
-        case '7D':
-          startDate.setDate(endDate.getDate() - 7);
-          break;
-        case '30D':
-          startDate.setDate(endDate.getDate() - 30);
-          break;
-        case '90D':
-          startDate.setDate(endDate.getDate() - 90);
-          break;
-        default:
-          startDate.setDate(endDate.getDate() - 30);
-      }
-
-      const { data: crimeData, error: crimeError } = await supabase
-        .from('crimes')
-        .select('*')
-        .gte('data_fato', startDate.toISOString())
-        .lte('data_fato', endDate.toISOString())
-        .order('data_fato', { ascending: true });
-
-      if (crimeError) throw crimeError;
-
-      const processedData = processTimeSeriesData(crimeData || []);
-      setGraphData(processedData);
-    } catch (err: any) {
-      console.error('Error fetching graph data:', err);
-      setError(err.message);
-    }
-  };
-
-  const processTimeSeriesData = (data: any[]) => {
+  const processGraphData = (data: any[], timeRange: TimeRange) => {
     // Criar um mapa de datas com todos os dias no período
     const dateMap: { [key: string]: any } = {};
     const startDate = new Date();
@@ -217,6 +179,46 @@ export const Dashboard: React.FC = () => {
 
     // Retornar array ordenado por data
     return Object.values(dateMap).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+
+  const processCardData = (data: any[]) => {
+    // Inicializar contadores por unidade
+    const unitTotals: Record<string, any> = {};
+    ['AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43'].forEach(unit => {
+      unitTotals[unit] = {
+        total: 0,
+        letalidadeViolenta: 0,
+        rouboDeRua: 0,
+        rouboDeVeiculo: 0,
+        rouboDeCarga: 0
+      };
+    });
+
+    // Processar todos os crimes para os totais
+    data.forEach((crime: any) => {
+      const unit = crime.aisp;
+      const indicator = crime.indicador_estrategico?.toLowerCase() || '';
+      
+      if (unit && unitTotals[unit]) {
+        unitTotals[unit].total += 1;
+
+        // Incrementar contadores específicos
+        if (indicator.includes('letalidade')) {
+          unitTotals[unit].letalidadeViolenta += 1;
+        }
+        if (indicator.includes('roubo de rua')) {
+          unitTotals[unit].rouboDeRua += 1;
+        }
+        if (indicator.includes('roubo de veículo')) {
+          unitTotals[unit].rouboDeVeiculo += 1;
+        }
+        if (indicator.includes('roubo de carga')) {
+          unitTotals[unit].rouboDeCarga += 1;
+        }
+      }
+    });
+
+    return unitTotals;
   };
 
   const handleImportSuccess = () => {
@@ -270,6 +272,12 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleTimeRangeChange = (newRange: TimeRange) => {
+    const scrollPosition = window.scrollY;
+    setTimeRange(newRange);
+    window.scrollTo(0, scrollPosition);
+  };
+
   useEffect(() => {
     const checkAdmin = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -282,14 +290,14 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      try {
-        await fetchCardData();
-        await fetchGraphData();
-      } catch (err: any) {
-        setError(err.message);
-      }
+      await fetchCardData();
+      await fetchGraphData();
     };
     loadData();
+  }, []);
+
+  useEffect(() => {
+    fetchGraphData();
   }, [timeRange]);
 
   const handleLogout = async () => {
@@ -389,15 +397,15 @@ export const Dashboard: React.FC = () => {
                           <FiTrash2 size={16} />
                           Limpar Dados
                         </button>
-                        <button
-                          onClick={handleLogout}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                        >
-                          <FiLogOut size={16} />
-                          Sair
-                        </button>
                       </>
                     )}
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                    >
+                      <FiLogOut size={16} />
+                      Sair
+                    </button>
                   </div>
                 </div>
 
@@ -549,13 +557,17 @@ export const Dashboard: React.FC = () => {
                 <div className="flex items-center gap-4">
                   <TimeRangeSelector
                     timeRange={timeRange}
-                    onChange={(range) => setTimeRange(range as TimeRange)}
+                    onChange={handleTimeRangeChange}
                   />
                 </div>
               </div>
               <div className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={graphData}>
+                <ResponsiveContainer key="crime-chart" width="100%" height="100%">
+                  <LineChart
+                    ref={chartRef}
+                    data={graphData}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
                       dataKey="date" 
