@@ -8,15 +8,17 @@ import {
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import type { PoliceUnit } from '../types';
-import { getSupabaseAdmin, supabase } from '../config/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
+import { FiUpload, FiTrash2, FiSettings, FiLogOut, FiUsers } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 
 interface DashboardData {
   units: Record<string, {
     total: number;
-    lethal_violence: number;
-    street_robbery: number;
-    vehicle_robbery: number;
-    cargo_robbery: number;
+    letalidadeViolenta: number;
+    rouboDeRua: number;
+    rouboDeVeiculo: number;
+    rouboDeCarga: number;
   }>;
   timeseries: Array<{
     date: string;
@@ -25,31 +27,18 @@ interface DashboardData {
   }>;
 }
 
+type TimeRange = '7D' | '30D' | '90D';
+
 export const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState<TimeRange>('30D');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [cardData, setCardData] = useState<Record<string, any>>({});
   const [graphData, setGraphData] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
   const navigate = useNavigate();
   const chartRef = useRef<HTMLDivElement>(null);
-
-  // Metas por tipo de crime (mensais)
-  const crimeTargets: Record<string, number> = {
-    'letalidade violenta': 10,
-    'roubo de rua': 100,
-    'roubo de veículo': 50,
-    'roubo de carga': 20
-  };
-
-  // Calcular meta total baseada no tipo de crime selecionado
-  const calculateTarget = (crimeType: string) => {
-    if (crimeType === 'all') {
-      return Object.values(crimeTargets).reduce((sum, target) => sum + target, 0);
-    }
-    return crimeTargets[crimeType] || 0;
-  };
 
   const battalionColors: Record<PoliceUnit, string> = {
     'AISP 10': 'bg-blue-600',
@@ -60,54 +49,33 @@ export const Dashboard: React.FC = () => {
   };
 
   const defaultUnits = {
-    'AISP 10': { total: 0, lethal_violence: 0, street_robbery: 0, vehicle_robbery: 0, cargo_robbery: 0 },
-    'AISP 28': { total: 0, lethal_violence: 0, street_robbery: 0, vehicle_robbery: 0, cargo_robbery: 0 },
-    'AISP 33': { total: 0, lethal_violence: 0, street_robbery: 0, vehicle_robbery: 0, cargo_robbery: 0 },
-    'AISP 37': { total: 0, lethal_violence: 0, street_robbery: 0, vehicle_robbery: 0, cargo_robbery: 0 },
-    'AISP 43': { total: 0, lethal_violence: 0, street_robbery: 0, vehicle_robbery: 0, cargo_robbery: 0 }
+    'AISP 10': { total: 0, letalidadeViolenta: 0, rouboDeRua: 0, rouboDeVeiculo: 0, rouboDeCarga: 0 },
+    'AISP 28': { total: 0, letalidadeViolenta: 0, rouboDeRua: 0, rouboDeVeiculo: 0, rouboDeCarga: 0 },
+    'AISP 33': { total: 0, letalidadeViolenta: 0, rouboDeRua: 0, rouboDeVeiculo: 0, rouboDeCarga: 0 },
+    'AISP 37': { total: 0, letalidadeViolenta: 0, rouboDeRua: 0, rouboDeVeiculo: 0, rouboDeCarga: 0 },
+    'AISP 43': { total: 0, letalidadeViolenta: 0, rouboDeRua: 0, rouboDeVeiculo: 0, rouboDeCarga: 0 }
   };
 
   const fetchCardData = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Buscar metas
-      const { data: targetsData, error } = await supabase
-        .from('targets')
-        .select('*')
-        .eq('year', 2025)
-        .eq('semester', 1);
-
-      if (error) throw error;
-
-      // Processar metas por unidade
-      const unitData: Record<string, { total: number, target: number }> = {};
-      targetsData?.forEach((target: any) => {
-        unitData[target.unit] = {
-          total: 0,
-          target: target.target_value
-        };
-      });
-
-      // Buscar todos os dados para os totais
-      let queryTotals = supabase
+      
+      const { data: allCrimes, error } = await supabaseAdmin
         .from('crimes')
         .select('*');
 
-      const { data: allCrimes, error: allCrimesError } = await queryTotals;
-
-      if (allCrimesError) throw allCrimesError;
+      if (error) throw error;
 
       // Inicializar contadores por unidade
       const unitTotals: Record<string, any> = {};
       ['AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43'].forEach(unit => {
         unitTotals[unit] = {
           total: 0,
-          lethal_violence: 0,
-          street_robbery: 0,
-          vehicle_robbery: 0,
-          cargo_robbery: 0
+          letalidadeViolenta: 0,
+          rouboDeRua: 0,
+          rouboDeVeiculo: 0,
+          rouboDeCarga: 0
         };
       });
 
@@ -121,21 +89,46 @@ export const Dashboard: React.FC = () => {
 
           // Incrementar contadores específicos
           if (indicator.includes('letalidade')) {
-            unitTotals[unit].lethal_violence += 1;
+            unitTotals[unit].letalidadeViolenta += 1;
           }
           if (indicator.includes('roubo de rua')) {
-            unitTotals[unit].street_robbery += 1;
+            unitTotals[unit].rouboDeRua += 1;
           }
           if (indicator.includes('roubo de veículo')) {
-            unitTotals[unit].vehicle_robbery += 1;
+            unitTotals[unit].rouboDeVeiculo += 1;
           }
           if (indicator.includes('roubo de carga')) {
-            unitTotals[unit].cargo_robbery += 1;
+            unitTotals[unit].rouboDeCarga += 1;
           }
         }
       });
 
       setCardData(unitTotals);
+
+      // Buscar metas
+      const { data: targetsData, error: targetsError } = await supabase
+        .from('targets')
+        .select('*')
+        .eq('year', 2025)
+        .eq('semester', 1)
+        .in('unit', ['RISP 5', 'AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43']); // Buscando metas de todas as unidades
+
+      if (targetsError) throw targetsError;
+
+      console.log('Metas recebidas:', targetsData); // Para debug
+
+      // Processar metas por unidade
+      const targetsByUnit: Record<string, Record<string, number>> = {};
+      targetsData?.forEach((target) => {
+        if (!targetsByUnit[target.unit]) {
+          targetsByUnit[target.unit] = {};
+        }
+        targetsByUnit[target.unit][target.crime_type] = target.target_value;
+      });
+
+      console.log('Metas processadas:', targetsByUnit); // Para debug
+
+      setTargets(targetsByUnit);
     } catch (err: any) {
       console.error('Error fetching card data:', err);
       setError(err.message);
@@ -146,57 +139,101 @@ export const Dashboard: React.FC = () => {
 
   const fetchGraphData = async () => {
     try {
-      // Não setamos loading aqui para evitar o flash da tela
       setError(null);
 
-      // Buscar dados do período para o gráfico
+      // Calcular datas baseado no timeRange
       const endDate = new Date();
       const startDate = new Date();
-      const days = parseInt(timeRange.replace(/[^0-9]/g, ''));
-      startDate.setDate(startDate.getDate() - days);
+      
+      switch (timeRange) {
+        case '7D':
+          startDate.setDate(endDate.getDate() - 7);
+          break;
+        case '30D':
+          startDate.setDate(endDate.getDate() - 30);
+          break;
+        case '90D':
+          startDate.setDate(endDate.getDate() - 90);
+          break;
+        default:
+          startDate.setDate(endDate.getDate() - 30);
+      }
 
-      let queryGraph = supabase
+      const { data: crimes, error } = await supabaseAdmin
         .from('crimes')
         .select('*')
         .gte('data_fato', startDate.toISOString().split('T')[0])
         .lte('data_fato', endDate.toISOString().split('T')[0])
         .order('data_fato', { ascending: true });
 
-      const { data: periodCrimes, error: periodCrimesError } = await queryGraph;
+      if (error) throw error;
 
-      if (periodCrimesError) throw periodCrimesError;
-
-      // Criar mapa de datas para o gráfico
-      const dateMap: Record<string, any> = {};
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        dateMap[dateStr] = {
-          date: dateStr,
-          'AISP 10': 0,
-          'AISP 28': 0,
-          'AISP 33': 0,
-          'AISP 37': 0,
-          'AISP 43': 0
-        };
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      // Processar crimes do período para o gráfico
-      periodCrimes?.forEach((crime: any) => {
-        const date = crime.data_fato?.split('T')[0];
-        const unit = crime.aisp;
-        if (date && unit && dateMap[date]) {
-          dateMap[date][unit] = (dateMap[date][unit] || 0) + 1;
-        }
-      });
-
-      setGraphData(Object.values(dateMap));
+      // Processar dados para o gráfico
+      const processedData = processGraphData(crimes || []);
+      setGraphData(processedData);
     } catch (err: any) {
       console.error('Error fetching graph data:', err);
       setError(err.message);
     }
   };
+
+  const processGraphData = (crimes: any[]) => {
+    // Criar mapa de datas para o gráfico
+    const dateMap: Record<string, any> = {};
+    const currentDate = new Date();
+    const endDate = new Date();
+    const startDate = new Date();
+    switch (timeRange) {
+      case '7D':
+        startDate.setDate(endDate.getDate() - 7);
+        break;
+      case '30D':
+        startDate.setDate(endDate.getDate() - 30);
+        break;
+      case '90D':
+        startDate.setDate(endDate.getDate() - 90);
+        break;
+      default:
+        startDate.setDate(endDate.getDate() - 30);
+    }
+    while (currentDate >= startDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      dateMap[dateStr] = {
+        date: dateStr,
+        'AISP 10': 0,
+        'AISP 28': 0,
+        'AISP 33': 0,
+        'AISP 37': 0,
+        'AISP 43': 0
+      };
+      currentDate.setDate(currentDate.getDate() - 1);
+    }
+
+    // Processar crimes do período para o gráfico
+    crimes?.forEach((crime: any) => {
+      const date = crime.data_fato?.split('T')[0];
+      const unit = crime.aisp;
+      if (date && unit && dateMap[date]) {
+        dateMap[date][unit] = (dateMap[date][unit] || 0) + 1;
+      }
+    });
+
+    return Object.values(dateMap);
+  };
+
+  const handleImportSuccess = () => {
+    fetchCardData();
+  };
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userRole = session?.user?.user_metadata?.role;
+      setIsAdmin(userRole === 'admin');
+    };
+    
+    checkAdmin();
+  }, []);
 
   useEffect(() => {
     fetchCardData();
@@ -206,39 +243,11 @@ export const Dashboard: React.FC = () => {
     fetchGraphData();
   }, [timeRange]);
 
-  useEffect(() => {
-    const fetchTargets = async () => {
-      const { data: targetsData, error } = await supabase
-        .from('targets')
-        .select('*')
-        .eq('year', 2025)
-        .eq('semester', 1);
-
-      if (error) {
-        console.error('Erro ao buscar metas:', error);
-        return;
-      }
-
-      // Organizar metas por unidade e tipo de crime
-      const targetsByUnit = targetsData.reduce((acc: any, target) => {
-        if (!acc[target.unit]) {
-          acc[target.unit] = {};
-        }
-        acc[target.unit][target.crime_type] = target.target_value;
-        return acc;
-      }, {});
-
-      setTargets(targetsByUnit);
-    };
-
-    fetchTargets();
-  }, []);
-
   const handleClearData = async () => {
     if (window.confirm('Tem certeza que deseja zerar todos os dados? Esta ação não pode ser desfeita.')) {
       try {
         setLoading(true);
-        const { error } = await getSupabaseAdmin()
+        const { error } = await supabaseAdmin
           .from('crimes')
           .delete()
           .neq('id', 0);
@@ -255,6 +264,17 @@ export const Dashboard: React.FC = () => {
       } finally {
         setLoading(false);
       }
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      navigate('/login');
+      toast.success('Logout realizado com sucesso!');
+    } catch (error: any) {
+      toast.error(`Erro ao fazer logout: ${error.message}`);
     }
   };
 
@@ -276,7 +296,12 @@ export const Dashboard: React.FC = () => {
 
   // Calcular total do CPA
   const cpaTotal = Object.values(cardData).reduce((sum: number, unit: any) => sum + (unit?.total || 0), 0);
-  const cpaTarget = calculateTarget('all');
+  const cpaTarget = (
+    (targets['RISP 5']?.['letalidade violenta'] || 0) + 
+    (targets['RISP 5']?.['roubo de veículo'] || 0) + 
+    (targets['RISP 5']?.['roubo de rua'] || 0) + 
+    (targets['RISP 5']?.['roubo de carga'] || 0)
+  );
   const cpaTrend = cpaTotal === 0 ? 0 : ((cpaTotal - cpaTarget) / cpaTarget) * 100;
 
   return (
@@ -292,31 +317,48 @@ export const Dashboard: React.FC = () => {
                     <h3 className="text-2xl font-semibold">5ª RISP - Total de Ocorrências</h3>
                   </div>
                   <div className="flex items-center gap-4">
-                    <ImportButton onImportSuccess={() => {
-                      setLoading(true);
-                      fetchCardData();
-                      fetchGraphData();
-                    }} />
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => navigate('/users')}
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                          <FiUsers className="mr-2 h-5 w-5" />
+                          Gerenciar Usuários
+                        </button>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        >
+                          <FiUpload className="mr-2 h-5 w-5" />
+                          Importar Dados
+                        </button>
+                        <button
+                          onClick={handleClearData}
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        >
+                          <FiTrash2 className="mr-2 h-5 w-5" />
+                          Limpar Dados
+                        </button>
+                        <Link
+                          to="/targets"
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                        >
+                          <FiSettings className="mr-2 h-5 w-5" />
+                          Metas
+                        </Link>
+                      </>
+                    )}
                     <button
-                      onClick={handleClearData}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      onClick={handleLogout}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                      Limpar Dados
-                    </button>
-                    <button
-                      onClick={() => navigate('/targets')}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                      </svg>
-                      Configurar Metas
+                      <FiLogOut className="mr-2 h-5 w-5" />
+                      Sair
                     </button>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-4 gap-8 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center">
                     <div className="bg-green-600 rounded-full p-4 mb-4">
@@ -328,13 +370,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Letalidade Violenta</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.lethal_violence || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.letalidadeViolenta || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['letalidade violenta'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.lethal_violence || 0), 0) - (targets['RISP 5']?.['letalidade violenta'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.letalidadeViolenta || 0), 0) - (targets['RISP 5']?.['letalidade violenta'] || 0))}
                     </span>
                   </div>
 
@@ -348,13 +390,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Veículo</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.vehicle_robbery || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeVeiculo || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de veículo'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.vehicle_robbery || 0), 0) - (targets['RISP 5']?.['roubo de veículo'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeVeiculo || 0), 0) - (targets['RISP 5']?.['roubo de veículo'] || 0))}
                     </span>
                   </div>
 
@@ -368,13 +410,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Rua</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.street_robbery || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeRua || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de rua'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.street_robbery || 0), 0) - (targets['RISP 5']?.['roubo de rua'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeRua || 0), 0) - (targets['RISP 5']?.['roubo de rua'] || 0))}
                     </span>
                   </div>
 
@@ -388,13 +430,13 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Carga</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.cargo_robbery || 0), 0)}
+                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeCarga || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de carga'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.cargo_robbery || 0), 0) - (targets['RISP 5']?.['roubo de carga'] || 0))}
+                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeCarga || 0), 0) - (targets['RISP 5']?.['roubo de carga'] || 0))}
                     </span>
                   </div>
                 </div>
@@ -417,36 +459,36 @@ export const Dashboard: React.FC = () => {
                     <h3 className="text-lg font-semibold">{unit}</h3>
                     <div className="space-y-2 mt-4">
                       <div>
-                        <p className="text-sm">Letalidade</p>
+                        <p className="text-sm">Letalidade Violenta</p>
                         <p className="text-lg font-bold">
-                          {stats.lethal_violence}
+                          {stats.letalidadeViolenta}
                           <span className="text-sm font-normal ml-2">
                             Meta: {targets[unit]?.['letalidade violenta'] || 0}
                           </span>
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm">Roubo de Rua</p>
-                        <p className="text-lg font-bold">
-                          {stats.street_robbery}
-                          <span className="text-sm font-normal ml-2">
-                            Meta: {targets[unit]?.['roubo de rua'] || 0}
-                          </span>
-                        </p>
-                      </div>
-                      <div>
                         <p className="text-sm">Roubo de Veículo</p>
                         <p className="text-lg font-bold">
-                          {stats.vehicle_robbery}
+                          {stats.rouboDeVeiculo}
                           <span className="text-sm font-normal ml-2">
                             Meta: {targets[unit]?.['roubo de veículo'] || 0}
                           </span>
                         </p>
                       </div>
                       <div>
+                        <p className="text-sm">Roubo de Rua</p>
+                        <p className="text-lg font-bold">
+                          {stats.rouboDeRua}
+                          <span className="text-sm font-normal ml-2">
+                            Meta: {targets[unit]?.['roubo de rua'] || 0}
+                          </span>
+                        </p>
+                      </div>
+                      <div>
                         <p className="text-sm">Roubo de Carga</p>
                         <p className="text-lg font-bold">
-                          {stats.cargo_robbery}
+                          {stats.rouboDeCarga}
                           <span className="text-sm font-normal ml-2">
                             Meta: {targets[unit]?.['roubo de carga'] || 0}
                           </span>
@@ -460,18 +502,13 @@ export const Dashboard: React.FC = () => {
 
             {/* Time Series Chart */}
             <div ref={chartRef} className="bg-white p-6 rounded-lg shadow-lg relative">
-              <div className="mb-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Evolução por Batalhão</h2>
-                  <div className="sticky top-4 z-10 bg-white p-2 rounded-lg shadow-md">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Período do Gráfico
-                    </label>
-                    <TimeRangeSelector
-                      value={timeRange}
-                      onChange={setTimeRange}
-                    />
-                  </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Gráfico de Ocorrências</h2>
+                <div className="flex items-center gap-4">
+                  <TimeRangeSelector
+                    timeRange={timeRange}
+                    onChange={(range) => setTimeRange(range as TimeRange)}
+                  />
                 </div>
               </div>
               <div className="h-[400px]">

@@ -1,39 +1,34 @@
 import React from 'react';
-import type { TimeRange } from '../types';
+
+type TimeRange = '7D' | '30D' | '90D';
 
 interface TimeRangeSelectorProps {
   value: TimeRange;
-  onChange: (range: TimeRange) => void;
+  onChange: (value: TimeRange) => void;
 }
 
-export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({ value, onChange }) => {
-  const ranges: Array<{ value: TimeRange; label: string }> = [
+export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
+  const options: { value: TimeRange; label: string }[] = [
     { value: '7D', label: '7 dias' },
-    { value: '15D', label: '15 dias' },
     { value: '30D', label: '30 dias' },
     { value: '90D', label: '90 dias' },
-    { value: '180D', label: '6 meses' },
-    { value: '1Y', label: '1 ano' }
   ];
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {ranges.map((range) => (
+    <div className="flex space-x-2">
+      {options.map((option) => (
         <button
-          key={range.value}
-          className={`px-4 py-2 rounded-md transition-colors ${
-            value === range.value
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            value === option.value
               ? 'bg-blue-600 text-white'
               : 'bg-white text-gray-600 hover:bg-gray-100'
           }`}
-          onClick={(e) => {
-            e.preventDefault();
-            onChange(range.value);
-          }}
         >
-          {range.label}
+          {option.label}
         </button>
       ))}
     </div>
   );
-};
+}

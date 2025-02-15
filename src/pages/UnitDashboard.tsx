@@ -81,21 +81,34 @@ const UNIT_COLORS = {
 
 interface CrimeMetrics {
   name: string;
-  actual: number;
-  target: number;
-  difference: number;
+  atual: number;
+  meta: number;
 }
 
 const generateCrimeMetrics = (unit: string, crimeData: any[]): CrimeMetrics[] => {
   // Extract crime data for the specified unit
-  const crimeMetrics = crimeData.map((crime) => {
-    return {
-      name: crime.type,
-      actual: crime.count,
-      target: 75,
-      difference: crime.count - 75
-    };
-  });
+  const crimeMetrics = [
+    {
+      name: 'Letalidade Violenta',
+      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'letalidade violenta').length,
+      meta: 75
+    },
+    {
+      name: 'Roubo de Veículo',
+      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'roubo de veículo').length,
+      meta: 75
+    },
+    {
+      name: 'Roubo de Rua',
+      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'roubo de rua').length,
+      meta: 75
+    },
+    {
+      name: 'Roubo de Carga',
+      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'roubo de carga').length,
+      meta: 75
+    }
+  ];
 
   return crimeMetrics;
 };
@@ -313,6 +326,10 @@ const generateHeatMapData = (unit: string, crimes: any[]) => {
 
 export const UnitDashboard: React.FC = () => {
   const { unit } = useParams<{ unit: string }>();
+  const [loading, setLoading] = useState(true);
+  const [crimes, setCrimes] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<string>('M');
   const [mapData, setMapData] = useState<CrimeData[]>([]);
   const [unitData, setUnitData] = useState({
     total: 0,
@@ -321,17 +338,66 @@ export const UnitDashboard: React.FC = () => {
     vehicle_robbery: 0,
     cargo_robbery: 0
   });
-  const [comparisonData, setComparisonData] = useState<any[]>([]);
+  const [targets, setTargets] = useState<Record<string, number>>({
+    'Letalidade Violenta': 0,
+    'Roubo de Veículo': 0,
+    'Roubo de Rua': 0,
+    'Roubo de Carga': 0
+  });
+
+  useEffect(() => {
+    const fetchTargets = async () => {
+      const { data: targetsData, error } = await supabase
+        .from('targets')
+        .select('*')
+        .eq('unit', unit);
+
+      if (error) {
+        console.error('Erro ao buscar metas:', error);
+        return;
+      }
+
+      const targetMap: Record<string, number> = {
+        'Letalidade Violenta': 0,
+        'Roubo de Veículo': 0,
+        'Roubo de Rua': 0,
+        'Roubo de Carga': 0
+      };
+
+      targetsData?.forEach((target) => {
+        switch (target.crime_type.toLowerCase()) {
+          case 'letalidade violenta':
+            targetMap['Letalidade Violenta'] = target.target_value;
+            break;
+          case 'roubo de veículo':
+            targetMap['Roubo de Veículo'] = target.target_value;
+            break;
+          case 'roubo de rua':
+            targetMap['Roubo de Rua'] = target.target_value;
+            break;
+          case 'roubo de carga':
+            targetMap['Roubo de Carga'] = target.target_value;
+            break;
+        }
+      });
+
+      setTargets(targetMap);
+    };
+
+    if (unit) {
+      fetchTargets();
+    }
+  }, [unit]);
 
   useEffect(() => {
     if (unit) {
       loadData();
-      loadComparisonData();
     }
   }, [unit]);
 
   const loadData = async () => {
     if (!unit) return;
+    setLoading(true);
 
     try {
       const { data: crimes, error } = await supabase
@@ -341,7 +407,7 @@ export const UnitDashboard: React.FC = () => {
         .order('data_fato', { ascending: false });
 
       if (error) {
-        console.error('Erro ao buscar crimes:', error);
+        setError('Erro ao buscar crimes: ' + error.message);
         return;
       }
 
@@ -355,7 +421,6 @@ export const UnitDashboard: React.FC = () => {
 
       crimes?.forEach((crime: any) => {
         newUnitData.total++;
-
         const tipo = crime.indicador_estrategico?.toLowerCase() || '';
 
         switch (tipo) {
@@ -374,208 +439,262 @@ export const UnitDashboard: React.FC = () => {
         }
       });
 
+      setCrimes(crimes || []);
       const mapDataGenerated = generateHeatMapData(unit, crimes || []);
       setMapData(mapDataGenerated);
       setUnitData(newUnitData);
-    } catch (error) {
-      console.error('Error loading data:', error);
+    } catch (error: any) {
+      setError('Erro ao carregar dados: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const loadComparisonData = async () => {
-    try {
-      const { data: crimes, error } = await supabase
-        .from('crimes')
-        .select('*')
-        .in('aisp', ['AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43']);
-
-      if (error) {
-        console.error('Erro ao buscar dados de comparação:', error);
-        return;
-      }
-
-      const unitsData: Record<string, any> = {
-        'AISP 10': {
-          name: 'AISP 10',
-          'Letalidade Violenta': 0,
-          'Roubo de Veículo': 0,
-          'Roubo de Rua': 0,
-          'Roubo de Carga': 0
-        },
-        'AISP 28': {
-          name: 'AISP 28',
-          'Letalidade Violenta': 0,
-          'Roubo de Veículo': 0,
-          'Roubo de Rua': 0,
-          'Roubo de Carga': 0
-        },
-        'AISP 33': {
-          name: 'AISP 33',
-          'Letalidade Violenta': 0,
-          'Roubo de Veículo': 0,
-          'Roubo de Rua': 0,
-          'Roubo de Carga': 0
-        },
-        'AISP 37': {
-          name: 'AISP 37',
-          'Letalidade Violenta': 0,
-          'Roubo de Veículo': 0,
-          'Roubo de Rua': 0,
-          'Roubo de Carga': 0
-        },
-        'AISP 43': {
-          name: 'AISP 43',
-          'Letalidade Violenta': 0,
-          'Roubo de Veículo': 0,
-          'Roubo de Rua': 0,
-          'Roubo de Carga': 0
-        }
-      };
-
-      crimes?.forEach((crime: any) => {
-        const aisp = crime.aisp;
-        const tipo = crime.indicador_estrategico?.toLowerCase() || '';
-
-        if (unitsData[aisp]) {
-          switch (tipo) {
-            case 'letalidade violenta':
-              unitsData[aisp]['Letalidade Violenta']++;
-              break;
-            case 'roubo de rua':
-              unitsData[aisp]['Roubo de Rua']++;
-              break;
-            case 'roubo de veículo':
-              unitsData[aisp]['Roubo de Veículo']++;
-              break;
-            case 'roubo de carga':
-              unitsData[aisp]['Roubo de Carga']++;
-              break;
-          }
-        }
-      });
-
-      setComparisonData(Object.values(unitsData));
-    } catch (error) {
-      console.error('Error loading comparison data:', error);
-    }
-  };
-
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(date);
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-4 border rounded shadow">
-          <p className="font-semibold">{label instanceof Date ? formatDate(label) : label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
-              {entry.name}: {entry.value}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const PieChartLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const RADIAN = Math.PI / 180;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
+  if (loading) {
     return (
-      <text
-        x={x}
-        y={y}
-        fill="white"
-        textAnchor={x > cx ? 'start' : 'end'}
-        dominantBaseline="central"
-        className="text-xs"
-      >
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
+      <div className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
+        <div className="text-xl text-gray-600">Carregando dados...</div>
+      </div>
     );
-  };
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
+        <div className="text-xl text-red-600">{error}</div>
+      </div>
+    );
+  }
+
+  // Agrupar crimes por tipo para o gráfico de pizza
+  const crimesByType = crimes.reduce((acc: Record<string, number>, crime) => {
+    const type = crime.indicador_estrategico?.toLowerCase() || 'outros';
+    // Mapeia os tipos para o formato exato das chaves do CRIME_COLORS
+    let formattedType = type;
+    switch (type) {
+      case 'letalidade violenta':
+        formattedType = 'Letalidade Violenta';
+        break;
+      case 'roubo de veículo':
+        formattedType = 'Roubo de Veículo';
+        break;
+      case 'roubo de rua':
+        formattedType = 'Roubo de Rua';
+        break;
+      case 'roubo de carga':
+        formattedType = 'Roubo de Carga';
+        break;
+    }
+    acc[formattedType] = (acc[formattedType] || 0) + 1;
+    return acc;
+  }, {});
+
+  const pieData = Object.entries(crimesByType)
+    .map(([type, value]) => ({
+      name: type,
+      value
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Ordenar crimes por município e data
+  const sortedCrimes = [...crimes].sort((a, b) => {
+    // Primeiro ordena por município
+    const compareCity = a.municipio.localeCompare(b.municipio);
+    if (compareCity !== 0) return compareCity;
+    
+    // Se o município for igual, ordena por data (mais recente primeiro)
+    return new Date(b.data_fato).getTime() - new Date(a.data_fato).getTime();
+  });
+
+  // Dados para o gráfico de barras de comparação
+  const crimeMetrics = [
+    {
+      name: 'Letalidade Violenta',
+      atual: unitData.lethal_violence,
+      meta: targets['Letalidade Violenta']
+    },
+    {
+      name: 'Roubo de Veículo',
+      atual: unitData.vehicle_robbery,
+      meta: targets['Roubo de Veículo']
+    },
+    {
+      name: 'Roubo de Rua',
+      atual: unitData.street_robbery,
+      meta: targets['Roubo de Rua']
+    },
+    {
+      name: 'Roubo de Carga',
+      atual: unitData.cargo_robbery,
+      meta: targets['Roubo de Carga']
+    }
+  ];
+
+  const { data: timeSeriesData, cardData } = generateTimeSeriesData(timeRange, unit || '', []);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <Link to="/" className="flex items-center text-gray-600 hover:text-gray-900">
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Voltar
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">{unit}</h1>
-        </div>
+        {/* Card Principal */}
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          {/* Header */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Link to="/dashboard" className="text-gray-600 hover:text-gray-900">
+                  <ArrowLeft className="w-6 h-6" />
+                </Link>
+                <h1 className="text-2xl font-bold text-gray-900">{unit}</h1>
+              </div>
+            </div>
+          </div>
 
-        <div className="grid gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            {/* Crime Metrics Cards */}
+          {/* Conteúdo */}
+          <div className="p-6">
+            {/* Métricas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <div className="bg-white p-4 rounded-lg shadow-lg">
-                <h3 className="text-sm font-semibold text-gray-600">Letalidade Violenta</h3>
-                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Letalidade Violenta'] }}>
-                  {unitData.lethal_violence}
-                </p>
+              <div 
+                className="p-6 rounded-lg shadow-lg h-48"
+                style={{ 
+                  backgroundColor: CRIME_COLORS['Letalidade Violenta'] + '15',
+                  borderLeft: `4px solid ${CRIME_COLORS['Letalidade Violenta']}`
+                }}
+              >
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Letalidade Violenta</h3>
+                <div className="flex flex-col space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-600">Atual</p>
+                    <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Letalidade Violenta'] }}>
+                      {unitData.lethal_violence}
+                    </p>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-gray-600">Meta</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets['Letalidade Violenta']}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Diferença</p>
+                      <p className={`text-lg font-semibold ${unitData.lethal_violence > targets['Letalidade Violenta'] ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitData.lethal_violence > targets['Letalidade Violenta'] ? '+' : ''}{unitData.lethal_violence - targets['Letalidade Violenta']}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-lg">
-                <h3 className="text-sm font-semibold text-gray-600">Roubo de Veículo</h3>
-                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Roubo de Veículo'] }}>
-                  {unitData.vehicle_robbery}
-                </p>
+
+              <div 
+                className="p-6 rounded-lg shadow-lg h-48"
+                style={{ 
+                  backgroundColor: CRIME_COLORS['Roubo de Veículo'] + '15',
+                  borderLeft: `4px solid ${CRIME_COLORS['Roubo de Veículo']}`
+                }}
+              >
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Roubo de Veículo</h3>
+                <div className="flex flex-col space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-600">Atual</p>
+                    <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Roubo de Veículo'] }}>
+                      {unitData.vehicle_robbery}
+                    </p>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-gray-600">Meta</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets['Roubo de Veículo']}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Diferença</p>
+                      <p className={`text-lg font-semibold ${unitData.vehicle_robbery > targets['Roubo de Veículo'] ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitData.vehicle_robbery > targets['Roubo de Veículo'] ? '+' : ''}{unitData.vehicle_robbery - targets['Roubo de Veículo']}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-lg">
-                <h3 className="text-sm font-semibold text-gray-600">Roubo de Rua</h3>
-                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Roubo de Rua'] }}>
-                  {unitData.street_robbery}
-                </p>
+
+              <div 
+                className="p-6 rounded-lg shadow-lg h-48"
+                style={{ 
+                  backgroundColor: CRIME_COLORS['Roubo de Rua'] + '15',
+                  borderLeft: `4px solid ${CRIME_COLORS['Roubo de Rua']}`
+                }}
+              >
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Roubo de Rua</h3>
+                <div className="flex flex-col space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-600">Atual</p>
+                    <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Roubo de Rua'] }}>
+                      {unitData.street_robbery}
+                    </p>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-gray-600">Meta</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets['Roubo de Rua']}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Diferença</p>
+                      <p className={`text-lg font-semibold ${unitData.street_robbery > targets['Roubo de Rua'] ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitData.street_robbery > targets['Roubo de Rua'] ? '+' : ''}{unitData.street_robbery - targets['Roubo de Rua']}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-lg">
-                <h3 className="text-sm font-semibold text-gray-600">Roubo de Carga</h3>
-                <p className="text-2xl font-bold mt-2" style={{ color: CRIME_COLORS['Roubo de Carga'] }}>
-                  {unitData.cargo_robbery}
-                </p>
+
+              <div 
+                className="p-6 rounded-lg shadow-lg h-48"
+                style={{ 
+                  backgroundColor: CRIME_COLORS['Roubo de Carga'] + '15',
+                  borderLeft: `4px solid ${CRIME_COLORS['Roubo de Carga']}`
+                }}
+              >
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Roubo de Carga</h3>
+                <div className="flex flex-col space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-600">Atual</p>
+                    <p className="text-3xl font-bold" style={{ color: CRIME_COLORS['Roubo de Carga'] }}>
+                      {unitData.cargo_robbery}
+                    </p>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-gray-600">Meta</p>
+                      <p className="text-lg font-semibold text-gray-700">{targets['Roubo de Carga']}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600">Diferença</p>
+                      <p className={`text-lg font-semibold ${unitData.cargo_robbery > targets['Roubo de Carga'] ? 'text-red-600' : 'text-green-600'}`}>
+                        {unitData.cargo_robbery > targets['Roubo de Carga'] ? '+' : ''}{unitData.cargo_robbery - targets['Roubo de Carga']}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Crime Distribution and Comparison */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold mb-4 font-['Roboto']">
-                  Distribuição de Crimes
-                </h2>
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Distribuição */}
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h2 className="text-lg font-semibold mb-4">Distribuição de Crimes</h2>
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={[
-                          { id: 1, name: 'Letalidade Violenta', value: unitData.lethal_violence },
-                          { id: 2, name: 'Roubo de Veículo', value: unitData.vehicle_robbery },
-                          { id: 3, name: 'Roubo de Rua', value: unitData.street_robbery },
-                          { id: 4, name: 'Roubo de Carga', value: unitData.cargo_robbery }
-                        ].filter(item => item.value > 0)} // Filtra apenas valores maiores que 0
+                        data={pieData}
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
                         cy="50%"
                         outerRadius={150}
-                        label={PieChartLabel}
-                        labelLine={false}
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                       >
-                        {[
-                          { id: 1, name: 'Letalidade Violenta', value: unitData.lethal_violence },
-                          { id: 2, name: 'Roubo de Veículo', value: unitData.vehicle_robbery },
-                          { id: 3, name: 'Roubo de Rua', value: unitData.street_robbery },
-                          { id: 4, name: 'Roubo de Carga', value: unitData.cargo_robbery }
-                        ]
-                        .filter(item => item.value > 0) // Filtra apenas valores maiores que 0
-                        .map((entry, index) => (
+                        {pieData.map((entry) => (
                           <Cell 
-                            key={`crime-cell-${index}`}
-                            fill={CRIME_COLORS[entry.name as keyof typeof CRIME_COLORS]}
+                            key={`cell-${entry.name}`}
+                            fill={CRIME_COLORS[entry.name]}
                           />
                         ))}
                       </Pie>
@@ -586,39 +705,84 @@ export const UnitDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-xl font-bold mb-4 font-['Roboto']">
-                  Comparação com Outras AISPs
-                </h2>
+              {/* Comparação */}
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h2 className="text-lg font-semibold mb-4">Comparação com Meta</h2>
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={comparisonData}>
+                    <BarChart data={crimeMetrics}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="Letalidade Violenta" fill={CRIME_COLORS['Letalidade Violenta']} />
-                      <Bar dataKey="Roubo de Veículo" fill={CRIME_COLORS['Roubo de Veículo']} />
-                      <Bar dataKey="Roubo de Rua" fill={CRIME_COLORS['Roubo de Rua']} />
-                      <Bar dataKey="Roubo de Carga" fill={CRIME_COLORS['Roubo de Carga']} />
+                      <Bar dataKey="atual" name="Atual">
+                        {crimeMetrics.map((entry) => (
+                          <Cell 
+                            key={`cell-${entry.name}`}
+                            fill={CRIME_COLORS[entry.name]}
+                          />
+                        ))}
+                      </Bar>
+                      <Bar dataKey="meta" name="Meta" fill="#9333ea" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </div>
 
-            {/* Heat Map */}
-            <div className="grid grid-cols-1 gap-6">
-              <h2 className="text-lg font-semibold mb-2">
-                Mapa de Calor
-              </h2>
+            {/* Mapa de Calor */}
+            <div className="bg-gray-50 p-6 rounded-lg mb-8">
+              <h2 className="text-lg font-semibold mb-4">Mapa de Calor</h2>
               <div className="h-[500px]">
                 <CrimeMap 
-                  data={mapData} 
+                  data={mapData}
                   center={unit ? UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] : undefined}
                   zoom={unit ? UNIT_ZOOM[unit as keyof typeof UNIT_ZOOM] : undefined}
                 />
+              </div>
+            </div>
+
+            {/* Lista de Ocorrências */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h2 className="text-lg font-semibold mb-4">Últimas Ocorrências</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Data
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipo
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Município
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Bairro
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {sortedCrimes.map((crime) => (
+                      <tr key={crime.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(crime.data_fato).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                          {crime.indicador_estrategico?.toLowerCase()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {crime.municipio}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {crime.bairro}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
