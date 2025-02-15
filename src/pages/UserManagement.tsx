@@ -98,6 +98,13 @@ export function UserManagement() {
     }
   };
 
+  // Ordenar usuários para que os admins apareçam primeiro
+  const sortedUsers = [...users].sort((a, b) => {
+    if (a.role === 'admin' && b.role !== 'admin') return -1;
+    if (a.role !== 'admin' && b.role === 'admin') return 1;
+    return 0;
+  });
+
   return (
     <div className="min-h-screen bg-gray-100 py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -181,10 +188,9 @@ export function UserManagement() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Lista de Usuários</h2>
                 <span className="text-sm text-gray-500">
-                  Total: {users.length} usuários
+                  Total: {sortedUsers.length} usuários
                 </span>
               </div>
-              
               {loading ? (
                 <div className="flex justify-center items-center h-48">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -209,7 +215,7 @@ export function UserManagement() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user) => (
+                      {sortedUsers.map((user) => (
                         <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
@@ -246,12 +252,14 @@ export function UserManagement() {
                             })}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <button
-                              onClick={() => deleteUser(user.id)}
-                              className="text-red-600 hover:text-red-900 transition-colors flex items-center"
-                            >
-                              <FiTrash2 className="mr-1" /> Excluir
-                            </button>
+                            {user.role !== 'admin' && (
+                              <button
+                                onClick={() => deleteUser(user.id)}
+                                className="text-red-600 hover:text-red-900 transition-colors flex items-center"
+                              >
+                                <FiTrash2 className="mr-1" /> Excluir
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
