@@ -418,7 +418,11 @@ export const Dashboard: React.FC = () => {
 
                 <div className="grid grid-cols-4 gap-8 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center">
-                    <div className="bg-green-600 rounded-full p-4 mb-4">
+                    <div className={`${
+                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.letalidadeViolenta || 0), 0) > (targets['RISP 5']?.['letalidade violenta'] || 0) 
+                      ? 'bg-red-600' 
+                      : 'bg-green-600'
+                    } rounded-full p-4 mb-4`}>
                       <img 
                         src="/images/icons/letalidade.svg" 
                         alt="Letalidade Violenta"
@@ -438,7 +442,11 @@ export const Dashboard: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-center">
-                    <div className="bg-green-600 rounded-full p-4 mb-4">
+                    <div className={`${
+                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeVeiculo || 0), 0) > (targets['RISP 5']?.['roubo de veículo'] || 0)
+                      ? 'bg-red-600' 
+                      : 'bg-green-600'
+                    } rounded-full p-4 mb-4`}>
                       <img 
                         src="/images/icons/rouboveiculo.svg" 
                         alt="Roubo de Veículo"
@@ -458,7 +466,11 @@ export const Dashboard: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-center">
-                    <div className="bg-green-600 rounded-full p-4 mb-4">
+                    <div className={`${
+                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeRua || 0), 0) > (targets['RISP 5']?.['roubo de rua'] || 0)
+                      ? 'bg-red-600' 
+                      : 'bg-green-600'
+                    } rounded-full p-4 mb-4`}>
                       <img 
                         src="/images/icons/rouborua.svg" 
                         alt="Roubo de Rua"
@@ -478,7 +490,11 @@ export const Dashboard: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-center">
-                    <div className="bg-green-600 rounded-full p-4 mb-4">
+                    <div className={`${
+                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeCarga || 0), 0) > (targets['RISP 5']?.['roubo de carga'] || 0)
+                      ? 'bg-red-600' 
+                      : 'bg-green-600'
+                    } rounded-full p-4 mb-4`}>
                       <img 
                         src="/images/icons/roubocarga.svg" 
                         alt="Roubo de Carga"
