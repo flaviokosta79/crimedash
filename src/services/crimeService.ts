@@ -30,9 +30,9 @@ export const crimeService = {
       // Limpar dados existentes
       console.log('Limpando dados existentes...');
       const { error: deleteError } = await getSupabaseAdmin()
-        .from('crimes')
+        .from('crimes2')
         .delete()
-        .neq('seq', 0); // usando neq para garantir que a query afete todas as linhas
+        .neq('objectid', '0'); // usando neq para garantir que a query afete todas as linhas
 
       if (deleteError) {
         console.error('Erro ao limpar dados:', deleteError);
@@ -87,24 +87,23 @@ export const crimeService = {
           };
 
           const crime = {
-            seq: parseInt(row['objectid'] || '0'),
-            seq_bo: 0, // Não tem no arquivo
-            ano_bo: parseInt(row['Ano do fato'] || '2025'),
-            data_fato,
-            hora_fato,
-            data_comunicacao: data_fato, // Usando a mesma data do fato
-            titulo_do_delito: cleanText(row['Título do delito']),
-            tipo_do_delito: cleanText(row['Título do DO']),
-            indicador_estrategico: cleanText(row['Indicador estratégico']),
-            fase_divulgacao: cleanText(row['Fase de divulgação']),
-            dia_semana: cleanText(row['Dia da semana do fato']),
-            aisp: cleanText(row['AISP do fato']), // Usando diretamente a coluna 'CISP do fato'
-            risp: cleanText(row['RISP do fato']),
-            municipio: cleanText(row['Município do fato (IBGE)']),
-            bairro: cleanText(row['Bairro']),
-            faixa_horario: cleanText(row['Faixa horária'])
+            objectid: row['objectid'] || '0',
+            "Dia do registro": dia,
+            "Mes do registro": mes,
+            "Ano do registro": ano,
+            "RO": cleanText(row['RO']),
+            "Titulo do delito": cleanText(row['Título do delito']),
+            "Titulo do DO": cleanText(row['Título do DO']),
+            "Indicador estrategico": cleanText(row['Indicador estratégico']),
+            "Fase de divulgacao": cleanText(row['Fase de divulgação']),
+            "Dia da semana do fato": cleanText(row['Dia da semana do fato']),
+            "CISP do fato": cleanText(row['CISP do fato']),
+            "AISP do fato": cleanText(row['AISP do fato']),
+            "RISP do fato": cleanText(row['RISP do fato']),
+            "Municipio do fato (IBGE)": cleanText(row['Município do fato (IBGE)']),
+            "Bairro": cleanText(row['Bairro']),
+            "Faixa horaria": cleanText(row['Faixa horária'])
           };
-
           if (index === 0) {
             console.log('Primeiro crime processado:', crime);
           }
@@ -125,7 +124,7 @@ export const crimeService = {
         console.log(`Inserindo lote ${i/batchSize + 1}:`, batch.length, 'registros');
         
         const { error } = await getSupabaseAdmin()
-          .from('crimes')
+          .from('crimes2')
           .insert(batch);
 
         if (error) {
@@ -140,13 +139,17 @@ export const crimeService = {
       console.log('Calculando série temporal...');
       
       const timeseriesData = crimes.reduce((acc: any, crime) => {
-        const date = crime.data_fato;
-        const key = `${date}_${crime.aisp}`;
+        const dia = String(crime['Dia do registro']).padStart(2, '0');
+        const mes = String(crime['Mes do registro']).padStart(2, '0');
+        const ano = crime['Ano do registro'];
+        const date = `${ano}-${mes}-${dia}`;
+        const unit = crime['AISP do fato'];
+        const key = `${date}_${unit}`;
         
         if (!acc[key]) {
           acc[key] = {
             date,
-            unit: crime.aisp,
+            unit,
             count: 0
           };
         }
@@ -192,9 +195,9 @@ export const crimeService = {
 
   async getCrimesByUnit(unit: string) {
     const { data, error } = await supabase
-      .from('crimes')
+      .from('crimes2')
       .select('*')
-      .eq('aisp', unit);
+      .eq('AISP do fato', unit);
 
     if (error) throw error;
     return data;
@@ -214,9 +217,9 @@ export const crimeService = {
   async getTimeSeriesData(unit: string, startDate: Date, endDate: Date) {
     try {
       const { data, error } = await supabase
-        .from('crimes')
+        .from('crimes2')
         .select('*')
-        .eq('aisp', unit)
+        .eq('AISP do fato', unit)
         .gte('data_fato', startDate.toISOString().split('T')[0])
         .lte('data_fato', endDate.toISOString().split('T')[0])
         .order('data_fato', { ascending: true });
@@ -242,7 +245,7 @@ export const crimeService = {
       data?.forEach(crime => {
         const date = crime.data_fato;
         if (dates[date]) {
-          switch (crime.indicador_estrategico) {
+          switch (crime['Indicador estrategico']) {
             case 'Letalidade Violenta':
               dates[date]['Letalidade Violenta']++;
               break;

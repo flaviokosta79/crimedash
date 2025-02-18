@@ -79,7 +79,7 @@ export const Dashboard: React.FC = () => {
       setError(null);
       
       const { data: allCrimes, error } = await supabaseAdmin
-        .from('crimes')
+        .from('crimes2')
         .select('*');
 
       if (error) throw error;
@@ -113,7 +113,7 @@ export const Dashboard: React.FC = () => {
       
       // Buscar crimes e metas em paralelo para melhor performance
       const [crimesResponse, targetsResponse] = await Promise.all([
-        supabaseAdmin.from('crimes').select('*'),
+        supabaseAdmin.from('crimes2').select('*'),
         supabaseAdmin.from('targets').select('*')
       ]);
 
@@ -171,9 +171,12 @@ export const Dashboard: React.FC = () => {
 
     // Preencher com os dados reais de crimes
     data.forEach((item) => {
-      const date = item.data_fato.split('T')[0];
+      const dia = String(item['Dia do registro']).padStart(2, '0');
+      const mes = String(item['Mes do registro']).padStart(2, '0');
+      const ano = item['Ano do registro'];
+      const date = `${ano}-${mes}-${dia}`;
       if (dateMap[date]) {
-        dateMap[date][item.aisp] = (dateMap[date][item.aisp] || 0) + 1;
+        dateMap[date][item['AISP do fato']] = (dateMap[date][item['AISP do fato']] || 0) + 1;
       }
     });
 
@@ -196,8 +199,8 @@ export const Dashboard: React.FC = () => {
 
     // Processar todos os crimes para os totais
     data.forEach((crime: any) => {
-      const unit = crime.aisp;
-      const indicator = crime.indicador_estrategico?.toLowerCase() || '';
+      const unit = crime['AISP do fato'];
+      const indicator = crime['Indicador estrategico']?.toLowerCase() || '';
       
       if (unit && unitTotals[unit]) {
         unitTotals[unit].total += 1;
@@ -652,3 +655,4 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+

@@ -7,24 +7,11 @@ import {
 } from 'recharts';
 import { ArrowLeft } from 'lucide-react';
 import { CrimeMap } from '../components/CrimeMap';
-import type { CrimeType, PoliceUnit } from '../types';
-import { supabaseAdmin } from '../lib/supabase';
+import type { CrimeData, CrimeType, PoliceUnit } from '../types';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 
-// Update the CrimeData type to match our heat map structure
-interface CrimeData {
-  id: string;
-  date: Date;
-  type: CrimeType;
-  unit: PoliceUnit;
-  count: number;
-  lat: number;
-  lng: number;
-  region: string;
-  bairros: string[];
-}
-
-// Clean up unused imports and add type safety to CRIME_COLORS
-const CRIME_COLORS: Record<string, string> = {
+// Define as cores para cada tipo de crime (usado em todos os gráficos)
+const CRIME_COLORS = {
   'Letalidade Violenta': '#ff7f0e',
   'Roubo de Veículo': '#2ca02c',
   'Roubo de Rua': '#d62728',
@@ -216,11 +203,58 @@ const generateTimeSeriesData = (timeRange: string, unit: string, timeSeriesData:
   return { data, dateFormat, cardData };
 };
 
-const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
+const generateHeatMapData = (unit: string, crimes: any[]) => {
+  // Mapeamento de nomes de municípios (incluindo variações)
+  const cityMapping: Record<string, string> = {
+    'rio das flores': 'Rio das Flores',
+    'rio-das-flores': 'Rio das Flores',
+    'riodasflores': 'Rio das Flores',
+    'barra do pirai': 'Barra do Piraí',
+    'barra-do-pirai': 'Barra do Piraí',
+    'barradopirai': 'Barra do Piraí',
+    'valenca': 'Valença',
+    'valença': 'Valença',
+    'pirai': 'Piraí',
+    'piraí': 'Piraí',
+    'vassouras': 'Vassouras',
+    'miguel pereira': 'Miguel Pereira',
+    'miguel-pereira': 'Miguel Pereira',
+    'miguelpereira': 'Miguel Pereira',
+    'paty do alferes': 'Paty do Alferes',
+    'paty-do-alferes': 'Paty do Alferes',
+    'patydoalferes': 'Paty do Alferes',
+    'mendes': 'Mendes',
+    'engenheiro paulo de frontin': 'Engenheiro Paulo de Frontin',
+    'eng paulo de frontin': 'Engenheiro Paulo de Frontin',
+    'eng. paulo de frontin': 'Engenheiro Paulo de Frontin',
+    'volta redonda': 'Volta Redonda',
+    'volta-redonda': 'Volta Redonda',
+    'voltaredonda': 'Volta Redonda',
+    'barra mansa': 'Barra Mansa',
+    'barra-mansa': 'Barra Mansa',
+    'barramansa': 'Barra Mansa',
+    'pinheiral': 'Pinheiral',
+    'mangaratiba': 'Mangaratiba',
+    'angra dos reis': 'Angra dos Reis',
+    'angra-dos-reis': 'Angra dos Reis',
+    'angradosreis': 'Angra dos Reis',
+    'rio claro': 'Rio Claro',
+    'rio-claro': 'Rio Claro',
+    'rioclaro': 'Rio Claro',
+    'resende': 'Resende',
+    'itatiaia': 'Itatiaia',
+    'porto real': 'Porto Real',
+    'porto-real': 'Porto Real',
+    'portoreal': 'Porto Real',
+    'quatis': 'Quatis',
+    'paraty': 'Paraty',
+    'parati': 'Paraty'
+  };
+
   const unitArea = UNIT_AREAS[unit as keyof typeof UNIT_AREAS] || [];
   const crimesByCityAndNeighborhood: Record<string, Record<string, { count: number, bairros: Set<string> }>> = {};
   
-  // Initialize counters for each city
+  // Inicializar contadores para cada cidade
   unitArea.forEach(location => {
     crimesByCityAndNeighborhood[location.city] = {
       'Letalidade Violenta': { count: 0, bairros: new Set() },
@@ -230,44 +264,47 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
     };
   });
 
-  // Count crimes by city and type using the new field names
+  // Contar crimes por cidade e tipo
   crimes.forEach(crime => {
-    const municipio = crime['Municipio do fato (IBGE)'];
-    const tipo = crime['Indicador estrategico'];
-    const bairro = crime['Bairro'] || 'Não informado';
+    const municipioLower = crime.municipio?.toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z\s]/g, '')
+      .replace(/\s+/g, ' ');
+
+    const tipo = crime.indicador_estrategico?.toLowerCase() || '';
+    const bairro = crime.bairro || 'Não informado';
     
+    const cidadeMapeada = cityMapping[municipioLower];
     const cityMatch = unitArea.find(location => 
-      location.city === municipio
+      location.city === cidadeMapeada
     );
 
     if (cityMatch) {
-      let crimeType: string;
-      switch (tipo?.toLowerCase()) {
+      switch (tipo) {
         case 'letalidade violenta':
-          crimeType = 'Letalidade Violenta';
+          crimesByCityAndNeighborhood[cityMatch.city]['Letalidade Violenta'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Letalidade Violenta'].bairros.add(bairro);
           break;
         case 'roubo de rua':
-          crimeType = 'Roubo de Rua';
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Rua'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Rua'].bairros.add(bairro);
           break;
         case 'roubo de veículo':
-          crimeType = 'Roubo de Veículo';
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Veículo'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Veículo'].bairros.add(bairro);
           break;
         case 'roubo de carga':
-          crimeType = 'Roubo de Carga';
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Carga'].count++;
+          crimesByCityAndNeighborhood[cityMatch.city]['Roubo de Carga'].bairros.add(bairro);
           break;
-        default:
-          return;
-      }
-
-      if (crimesByCityAndNeighborhood[cityMatch.city][crimeType]) {
-        crimesByCityAndNeighborhood[cityMatch.city][crimeType].count++;
-        crimesByCityAndNeighborhood[cityMatch.city][crimeType].bairros.add(bairro);
       }
     }
   });
 
-  // Generate heat map data
-  return unitArea.flatMap(location => {
+  // Gerar dados do mapa de calor
+  const heatMapData = unitArea.flatMap(location => {
     const cityData = crimesByCityAndNeighborhood[location.city];
     return Object.entries(cityData)
       .filter(([_, data]) => data.count > 0)
@@ -283,6 +320,8 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
         bairros: Array.from(data.bairros).sort()
       }));
   });
+
+  return heatMapData;
 };
 
 export const UnitDashboard: React.FC = () => {
@@ -292,13 +331,20 @@ export const UnitDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<string>('M');
   const [mapData, setMapData] = useState<CrimeData[]>([]);
+  const [unitData, setUnitData] = useState({
+    total: 0,
+    lethal_violence: 0,
+    street_robbery: 0,
+    vehicle_robbery: 0,
+    cargo_robbery: 0
+  });
+  const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
   const [cardData, setCardData] = useState({
     letalidadeViolenta: 0,
     rouboDeVeiculo: 0,
     rouboDeRua: 0,
     rouboDeCarga: 0
   });
-  const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
     const fetchTargets = async () => {
@@ -340,17 +386,20 @@ export const UnitDashboard: React.FC = () => {
   const loadData = async () => {
     if (!unit) return;
     setLoading(true);
+
     try {
+      // Buscar todos os crimes da unidade sem filtro de data
       const { data: crimes, error } = await supabaseAdmin
-        .from('crimes2')
+        .from('crimes')
         .select('*')
-        .eq('AISP do fato', unit);
+        .eq('aisp', unit);
 
       if (error) {
         setError('Erro ao buscar crimes: ' + error.message);
         return;
       }
 
+      // Inicializa contadores
       const newCardData = {
         letalidadeViolenta: 0,
         rouboDeVeiculo: 0,
@@ -358,16 +407,21 @@ export const UnitDashboard: React.FC = () => {
         rouboDeCarga: 0
       };
 
+      // Conta os crimes usando a mesma lógica do Dashboard
       crimes?.forEach((crime: any) => {
-        const indicator = crime['Indicador estrategico']?.toLowerCase() || '';
+        const indicator = crime.indicador_estrategico?.toLowerCase() || '';
         
-        if (indicator === 'letalidade violenta') {
+        // Incrementar contadores específicos usando includes como no Dashboard
+        if (indicator.includes('letalidade')) {
           newCardData.letalidadeViolenta += 1;
-        } else if (indicator === 'roubo de rua') {
+        }
+        if (indicator.includes('roubo de rua')) {
           newCardData.rouboDeRua += 1;
-        } else if (indicator === 'roubo de veículo') {
+        }
+        if (indicator.includes('roubo de veículo')) {
           newCardData.rouboDeVeiculo += 1;
-        } else if (indicator === 'roubo de carga') {
+        }
+        if (indicator.includes('roubo de carga')) {
           newCardData.rouboDeCarga += 1;
         }
       });
@@ -401,7 +455,8 @@ export const UnitDashboard: React.FC = () => {
 
   // Agrupar crimes por tipo para o gráfico de pizza
   const crimesByType = crimes.reduce((acc: Record<string, number>, crime) => {
-    const type = crime['Indicador estrategico']?.toLowerCase() || 'outros';
+    const type = crime.indicador_estrategico?.toLowerCase() || 'outros';
+    // Mapeia os tipos para o formato exato das chaves do CRIME_COLORS
     let formattedType = type;
     switch (type) {
       case 'letalidade violenta':
@@ -430,12 +485,12 @@ export const UnitDashboard: React.FC = () => {
 
   // Ordenar crimes por município e data
   const sortedCrimes = [...crimes].sort((a, b) => {
-    const compareCity = (a['Municipio do fato (IBGE)'] || '').localeCompare(b['Municipio do fato (IBGE)'] || '');
+    // Primeiro ordena por município
+    const compareCity = a.municipio.localeCompare(b.municipio);
     if (compareCity !== 0) return compareCity;
     
-    const dateA = new Date(a['Ano do registro'], parseInt(a['Mes do registro']) - 1, parseInt(a['Dia do registro']));
-    const dateB = new Date(b['Ano do registro'], parseInt(b['Mes do registro']) - 1, parseInt(b['Dia do registro']));
-    return dateB.getTime() - dateA.getTime();
+    // Se o município for igual, ordena por data (mais recente primeiro)
+    return new Date(b.data_fato).getTime() - new Date(a.data_fato).getTime();
   });
 
   // Dados para o gráfico de barras de comparação
@@ -726,18 +781,18 @@ export const UnitDashboard: React.FC = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {sortedCrimes.map((crime) => (
-                      <tr key={crime.objectid} className="hover:bg-gray-50">
+                      <tr key={crime.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
+                          {new Date(crime.data_fato).toLocaleDateString('pt-BR')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                          {crime['Indicador estrategico']?.toLowerCase()}
+                          {crime.indicador_estrategico?.toLowerCase()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {crime['Municipio do fato (IBGE)']}
+                          {crime.municipio}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {crime['Bairro']}
+                          {crime.bairro}
                         </td>
                       </tr>
                     ))}
