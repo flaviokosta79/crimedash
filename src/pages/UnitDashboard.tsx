@@ -344,19 +344,14 @@ export const UnitDashboard: React.FC = () => {
   );
 
   const uniqueValues = useMemo(() => {
-    // Função auxiliar para ordenar horários
-    const timeMap: { [key: string]: number } = {
-      '0h às 5h59': 0,
-      '6h às 11h59': 1,
-      '12h às 17h59': 2,
-      '18h às 23h59': 3
-    };
-
+    // Array de referência para ordenação dos horários
+    const timeOrder = ['0h às 5h59', '6h às 11h59', '12h às 17h59', '18h às 23h59'];
+    
     const sortTimeRanges = (times: string[]) => {
       return [...times].sort((a, b) => {
-        const orderA = timeMap[a] ?? Number.MAX_SAFE_INTEGER;
-        const orderB = timeMap[b] ?? Number.MAX_SAFE_INTEGER;
-        return orderA - orderB;
+        const indexA = timeOrder.indexOf(a);
+        const indexB = timeOrder.indexOf(b);
+        return indexA - indexB;
       });
     };
 
