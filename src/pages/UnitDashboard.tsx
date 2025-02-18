@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -287,6 +287,7 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
 
 export const UnitDashboard: React.FC = () => {
   const { unit } = useParams<{ unit: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [crimes, setCrimes] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -304,7 +305,9 @@ export const UnitDashboard: React.FC = () => {
     date: '',
     type: '',
     city: '',
-    neighborhood: ''
+    neighborhood: '',
+    ro: '',
+    timeRange: ''
   });
 
   // Handle filter changes
@@ -334,11 +337,15 @@ export const UnitDashboard: React.FC = () => {
       const type = crime['Indicador estrategico']?.toLowerCase() || '';
       const city = crime['Municipio do fato (IBGE)'] || '';
       const neighborhood = crime['Bairro'] || '';
+      const ro = (crime['RO'] || '').trim(); // Ensure clean RO string
+      const timeRange = crime['Faixa horaria'] || '';
 
       return (!selectedFilters.date || date.includes(selectedFilters.date)) &&
              (!selectedFilters.type || type.includes(selectedFilters.type.toLowerCase())) &&
              (!selectedFilters.city || city.toLowerCase().includes(selectedFilters.city.toLowerCase())) &&
-             (!selectedFilters.neighborhood || neighborhood.toLowerCase().includes(selectedFilters.neighborhood.toLowerCase()));
+             (!selectedFilters.neighborhood || neighborhood.toLowerCase().includes(selectedFilters.neighborhood.toLowerCase())) &&
+             (!selectedFilters.ro || ro.includes(selectedFilters.ro.trim())) && // Clean comparison for RO
+             (!selectedFilters.timeRange || timeRange.toLowerCase().includes(selectedFilters.timeRange.toLowerCase()));
     }), [sortedCrimes, selectedFilters]
   );
 
@@ -346,7 +353,8 @@ export const UnitDashboard: React.FC = () => {
   const uniqueValues = useMemo(() => ({
     type: Array.from(new Set(sortedCrimes.map(crime => crime['Indicador estrategico']?.toLowerCase()))).filter(Boolean),
     city: Array.from(new Set(sortedCrimes.map(crime => crime['Municipio do fato (IBGE)']))).filter(Boolean),
-    neighborhood: Array.from(new Set(sortedCrimes.map(crime => crime['Bairro']))).filter(Boolean)
+    neighborhood: Array.from(new Set(sortedCrimes.map(crime => crime['Bairro']))).filter(Boolean),
+    timeRange: Array.from(new Set(sortedCrimes.map(crime => crime['Faixa horaria']))).filter(Boolean)
   }), [sortedCrimes]);
 
   useEffect(() => {
@@ -399,6 +407,8 @@ export const UnitDashboard: React.FC = () => {
         setError('Erro ao buscar crimes: ' + error.message);
         return;
       }
+
+      console.log('Sample crime data:', crimes?.[0]); // Debug log to see field names
 
       const newCardData = {
         letalidadeViolenta: 0,
@@ -765,6 +775,18 @@ export const UnitDashboard: React.FC = () => {
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         <div className="flex flex-col gap-2">
+                          <span>RO</span>
+                          <input
+                            type="text"
+                            placeholder="Filtrar por RO..."
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            value={selectedFilters.ro}
+                            onChange={(e) => handleFilterChange('ro', e.target.value)}
+                          />
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex flex-col gap-2">
                           <span>Tipo</span>
                           <select
                             className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -808,13 +830,35 @@ export const UnitDashboard: React.FC = () => {
                           </select>
                         </div>
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex flex-col gap-2">
+                          <span>Horário</span>
+                          <select
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            value={selectedFilters.timeRange}
+                            onChange={(e) => handleFilterChange('timeRange', e.target.value)}
+                          >
+                            <option value="">Todos</option>
+                            {uniqueValues.timeRange.map((time) => (
+                              <option key={time} value={time}>{time}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredCrimes.map((crime) => (
-                      <tr key={crime.objectid} className="hover:bg-gray-50">
+                      <tr 
+                        key={crime.objectid} 
+                        className="hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => navigate(`/crime/${crime['RO']}`)}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {crime['RO']}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
                           {crime['Indicador estrategico']?.toLowerCase()}
@@ -824,6 +868,9 @@ export const UnitDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {crime['Bairro']}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {crime['Faixa horaria']}
                         </td>
                       </tr>
                     ))}

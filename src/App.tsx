@@ -7,6 +7,7 @@ import { Targets } from './pages/Targets';
 import { UserManagement } from './pages/UserManagement';
 import { UnitDashboard } from './pages/UnitDashboard';
 import { PrivateRoute } from './components/PrivateRoute';
+import { CrimeHistory } from './pages/CrimeHistory';
 
 function App() {
   return (
@@ -41,6 +42,12 @@ function App() {
         <Route path="/unit/:unit" element={
           <PrivateRoute>
             <UnitDashboard />
+          </PrivateRoute>
+        } />
+
+        <Route path="/crime/:ro" element={
+          <PrivateRoute>
+            <CrimeHistory />
           </PrivateRoute>
         } />
 
