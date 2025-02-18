@@ -259,12 +259,24 @@ export const Dashboard: React.FC = () => {
   const handleClearData = async () => {
     if (window.confirm('Tem certeza que deseja limpar todos os dados? Esta ação não pode ser desfeita.')) {
       try {
-        const { error } = await supabaseAdmin
-          .from('crimes')
-          .delete()
-          .neq('id', 0);
+        // First get all the records
+        const { data: crimes, error: fetchError } = await supabaseAdmin
+          .from('crimes2')
+          .select('objectid');
 
-        if (error) throw error;
+        if (fetchError) throw fetchError;
+
+        // Then delete them one by one
+        if (crimes && crimes.length > 0) {
+          const deletePromises = crimes.map(crime => 
+            supabaseAdmin
+              .from('crimes2')
+              .delete()
+              .eq('objectid', crime.objectid)
+          );
+
+          await Promise.all(deletePromises);
+        }
 
         await fetchCardData();
         await fetchGraphData();
