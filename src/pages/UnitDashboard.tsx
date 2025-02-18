@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -300,6 +300,55 @@ export const UnitDashboard: React.FC = () => {
   });
   const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
 
+  const [selectedFilters, setSelectedFilters] = useState({
+    date: '',
+    type: '',
+    city: '',
+    neighborhood: ''
+  });
+
+  // Handle filter changes
+  const handleFilterChange = (column: string, value: string) => {
+    setSelectedFilters(prev => ({
+      ...prev,
+      [column]: value
+    }));
+  };
+
+  // Sort crimes by municipality and date using useMemo
+  const sortedCrimes = useMemo(() => 
+    [...crimes].sort((a, b) => {
+      const compareCity = (a['Municipio do fato (IBGE)'] || '').localeCompare(b['Municipio do fato (IBGE)'] || '');
+      if (compareCity !== 0) return compareCity;
+      
+      const dateA = new Date(a['Ano do registro'], parseInt(a['Mes do registro']) - 1, parseInt(a['Dia do registro']));
+      const dateB = new Date(b['Ano do registro'], parseInt(b['Mes do registro']) - 1, parseInt(b['Dia do registro']));
+      return dateB.getTime() - dateA.getTime();
+    }), [crimes]
+  );
+
+  // Filter crimes based on selected filters using useMemo
+  const filteredCrimes = useMemo(() => 
+    sortedCrimes.filter(crime => {
+      const date = `${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`;
+      const type = crime['Indicador estrategico']?.toLowerCase() || '';
+      const city = crime['Municipio do fato (IBGE)'] || '';
+      const neighborhood = crime['Bairro'] || '';
+
+      return (!selectedFilters.date || date.includes(selectedFilters.date)) &&
+             (!selectedFilters.type || type.includes(selectedFilters.type.toLowerCase())) &&
+             (!selectedFilters.city || city.toLowerCase().includes(selectedFilters.city.toLowerCase())) &&
+             (!selectedFilters.neighborhood || neighborhood.toLowerCase().includes(selectedFilters.neighborhood.toLowerCase()));
+    }), [sortedCrimes, selectedFilters]
+  );
+
+  // Get unique values for filter dropdowns using useMemo
+  const uniqueValues = useMemo(() => ({
+    type: Array.from(new Set(sortedCrimes.map(crime => crime['Indicador estrategico']?.toLowerCase()))).filter(Boolean),
+    city: Array.from(new Set(sortedCrimes.map(crime => crime['Municipio do fato (IBGE)']))).filter(Boolean),
+    neighborhood: Array.from(new Set(sortedCrimes.map(crime => crime['Bairro']))).filter(Boolean)
+  }), [sortedCrimes]);
+
   useEffect(() => {
     const fetchTargets = async () => {
       const { data: targetsData, error } = await supabaseAdmin
@@ -427,16 +476,6 @@ export const UnitDashboard: React.FC = () => {
       value
     }))
     .sort((a, b) => b.value - a.value);
-
-  // Ordenar crimes por município e data
-  const sortedCrimes = [...crimes].sort((a, b) => {
-    const compareCity = (a['Municipio do fato (IBGE)'] || '').localeCompare(b['Municipio do fato (IBGE)'] || '');
-    if (compareCity !== 0) return compareCity;
-    
-    const dateA = new Date(a['Ano do registro'], parseInt(a['Mes do registro']) - 1, parseInt(a['Dia do registro']));
-    const dateB = new Date(b['Ano do registro'], parseInt(b['Mes do registro']) - 1, parseInt(b['Dia do registro']));
-    return dateB.getTime() - dateA.getTime();
-  });
 
   // Dados para o gráfico de barras de comparação
   const crimeMetrics = [
@@ -707,29 +746,74 @@ export const UnitDashboard: React.FC = () => {
 
             {/* Lista de Ocorrências */}
             <div className="bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-lg font-semibold mb-4">Últimas Ocorrências</h2>
+              <h2 className="text-lg font-semibold mb-4 text-black">Ocorrências {unit}</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Data
+                        <div className="flex flex-col gap-2">
+                          <span>Data</span>
+                          <input
+                            type="text"
+                            placeholder="Filtrar por data..."
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            value={selectedFilters.date}
+                            onChange={(e) => handleFilterChange('date', e.target.value)}
+                          />
+                        </div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tipo
+                        <div className="flex flex-col gap-2">
+                          <span>Tipo</span>
+                          <select
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            value={selectedFilters.type}
+                            onChange={(e) => handleFilterChange('type', e.target.value)}
+                          >
+                            <option value="">Todos</option>
+                            {uniqueValues.type.map((type) => (
+                              <option key={type} value={type} className="capitalize">{type}</option>
+                            ))}
+                          </select>
+                        </div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Município
+                        <div className="flex flex-col gap-2">
+                          <span>Município</span>
+                          <select
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            value={selectedFilters.city}
+                            onChange={(e) => handleFilterChange('city', e.target.value)}
+                          >
+                            <option value="">Todos</option>
+                            {uniqueValues.city.map((city) => (
+                              <option key={city} value={city}>{city}</option>
+                            ))}
+                          </select>
+                        </div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Bairro
+                        <div className="flex flex-col gap-2">
+                          <span>Bairro</span>
+                          <select
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            value={selectedFilters.neighborhood}
+                            onChange={(e) => handleFilterChange('neighborhood', e.target.value)}
+                          >
+                            <option value="">Todos</option>
+                            {uniqueValues.neighborhood.map((neighborhood) => (
+                              <option key={neighborhood} value={neighborhood}>{neighborhood}</option>
+                            ))}
+                          </select>
+                        </div>
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {sortedCrimes.map((crime) => (
+                    {filteredCrimes.map((crime) => (
                       <tr key={crime.objectid} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
