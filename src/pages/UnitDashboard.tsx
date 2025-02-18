@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -288,6 +288,9 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
 export const UnitDashboard: React.FC = () => {
   const { unit } = useParams<{ unit: string }>();
   const navigate = useNavigate();
+  const tableRef = useRef<HTMLDivElement>(null);
+  
+  // States
   const [loading, setLoading] = useState(true);
   const [crimes, setCrimes] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -300,7 +303,6 @@ export const UnitDashboard: React.FC = () => {
     rouboDeCarga: 0
   });
   const [targets, setTargets] = useState<Record<string, Record<string, number>>>({});
-
   const [selectedFilters, setSelectedFilters] = useState({
     date: '',
     type: '',
@@ -309,16 +311,9 @@ export const UnitDashboard: React.FC = () => {
     ro: '',
     timeRange: ''
   });
+  const [visibleItems, setVisibleItems] = useState(10);
 
-  // Handle filter changes
-  const handleFilterChange = (column: string, value: string) => {
-    setSelectedFilters(prev => ({
-      ...prev,
-      [column]: value
-    }));
-  };
-
-  // Sort crimes by municipality and date using useMemo
+  // Memoized values
   const sortedCrimes = useMemo(() => 
     [...crimes].sort((a, b) => {
       const compareCity = (a['Municipio do fato (IBGE)'] || '').localeCompare(b['Municipio do fato (IBGE)'] || '');
@@ -330,32 +325,86 @@ export const UnitDashboard: React.FC = () => {
     }), [crimes]
   );
 
-  // Filter crimes based on selected filters using useMemo
   const filteredCrimes = useMemo(() => 
     sortedCrimes.filter(crime => {
       const date = `${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`;
       const type = crime['Indicador estrategico']?.toLowerCase() || '';
       const city = crime['Municipio do fato (IBGE)'] || '';
       const neighborhood = crime['Bairro'] || '';
-      const ro = (crime['RO'] || '').trim(); // Ensure clean RO string
+      const ro = (crime['RO'] || '').trim();
       const timeRange = crime['Faixa horaria'] || '';
 
       return (!selectedFilters.date || date.includes(selectedFilters.date)) &&
              (!selectedFilters.type || type.includes(selectedFilters.type.toLowerCase())) &&
              (!selectedFilters.city || city.toLowerCase().includes(selectedFilters.city.toLowerCase())) &&
              (!selectedFilters.neighborhood || neighborhood.toLowerCase().includes(selectedFilters.neighborhood.toLowerCase())) &&
-             (!selectedFilters.ro || ro.includes(selectedFilters.ro.trim())) && // Clean comparison for RO
+             (!selectedFilters.ro || ro.includes(selectedFilters.ro.trim())) &&
              (!selectedFilters.timeRange || timeRange.toLowerCase().includes(selectedFilters.timeRange.toLowerCase()));
     }), [sortedCrimes, selectedFilters]
   );
 
-  // Get unique values for filter dropdowns using useMemo
-  const uniqueValues = useMemo(() => ({
-    type: Array.from(new Set(sortedCrimes.map(crime => crime['Indicador estrategico']?.toLowerCase()))).filter(Boolean),
-    city: Array.from(new Set(sortedCrimes.map(crime => crime['Municipio do fato (IBGE)']))).filter(Boolean),
-    neighborhood: Array.from(new Set(sortedCrimes.map(crime => crime['Bairro']))).filter(Boolean),
-    timeRange: Array.from(new Set(sortedCrimes.map(crime => crime['Faixa horaria']))).filter(Boolean)
-  }), [sortedCrimes]);
+  const uniqueValues = useMemo(() => {
+    // Função auxiliar para ordenar horários
+    const timeMap: { [key: string]: number } = {
+      '0h às 5h59': 0,
+      '6h às 11h59': 1,
+      '12h às 17h59': 2,
+      '18h às 23h59': 3
+    };
+
+    const sortTimeRanges = (times: string[]) => {
+      return [...times].sort((a, b) => {
+        const orderA = timeMap[a] ?? Number.MAX_SAFE_INTEGER;
+        const orderB = timeMap[b] ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+    };
+
+    return {
+      type: Array.from(new Set(sortedCrimes.map(crime => crime['Indicador estrategico']?.toLowerCase())))
+        .filter(Boolean)
+        .sort(),
+      city: Array.from(new Set(sortedCrimes.map(crime => crime['Municipio do fato (IBGE)'])))
+        .filter(Boolean)
+        .sort(),
+      neighborhood: Array.from(new Set(sortedCrimes.map(crime => crime['Bairro'])))
+        .filter(Boolean)
+        .sort(),
+      timeRange: sortTimeRanges(Array.from(new Set(sortedCrimes.map(crime => crime['Faixa horaria'])))
+        .filter(Boolean))
+    };
+  }, [sortedCrimes]);
+
+  // Handlers
+  const handleFilterChange = (column: string, value: string) => {
+    setSelectedFilters(prev => ({
+      ...prev,
+      [column]: value
+    }));
+  };
+
+  const handleScroll = useCallback((e: Event) => {
+    const target = e.target as HTMLDivElement;
+    if (!target) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = target;
+    if (scrollHeight - scrollTop - clientHeight < 50) {
+      setVisibleItems(prev => Math.min(prev + 10, filteredCrimes.length));
+    }
+  }, [filteredCrimes.length]);
+
+  // Effects
+  useEffect(() => {
+    const tableContainer = tableRef.current;
+    if (tableContainer) {
+      tableContainer.addEventListener('scroll', handleScroll);
+      return () => tableContainer.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
+
+  useEffect(() => {
+    setVisibleItems(10);
+  }, [selectedFilters]);
 
   useEffect(() => {
     const fetchTargets = async () => {
@@ -758,124 +807,140 @@ export const UnitDashboard: React.FC = () => {
             <div className="bg-gray-50 p-6 rounded-lg">
               <h2 className="text-lg font-semibold mb-4 text-black">Ocorrências {unit}</h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <div className="flex flex-col gap-2">
-                          <span>Data</span>
-                          <input
-                            type="text"
-                            placeholder="Filtrar por data..."
-                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={selectedFilters.date}
-                            onChange={(e) => handleFilterChange('date', e.target.value)}
-                          />
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <div className="flex flex-col gap-2">
-                          <span>RO</span>
-                          <input
-                            type="text"
-                            placeholder="Filtrar por RO..."
-                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={selectedFilters.ro}
-                            onChange={(e) => handleFilterChange('ro', e.target.value)}
-                          />
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <div className="flex flex-col gap-2">
-                          <span>Tipo</span>
-                          <select
-                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={selectedFilters.type}
-                            onChange={(e) => handleFilterChange('type', e.target.value)}
-                          >
-                            <option value="">Todos</option>
-                            {uniqueValues.type.map((type) => (
-                              <option key={type} value={type} className="capitalize">{type}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <div className="flex flex-col gap-2">
-                          <span>Município</span>
-                          <select
-                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={selectedFilters.city}
-                            onChange={(e) => handleFilterChange('city', e.target.value)}
-                          >
-                            <option value="">Todos</option>
-                            {uniqueValues.city.map((city) => (
-                              <option key={city} value={city}>{city}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <div className="flex flex-col gap-2">
-                          <span>Bairro</span>
-                          <select
-                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={selectedFilters.neighborhood}
-                            onChange={(e) => handleFilterChange('neighborhood', e.target.value)}
-                          >
-                            <option value="">Todos</option>
-                            {uniqueValues.neighborhood.map((neighborhood) => (
-                              <option key={neighborhood} value={neighborhood}>{neighborhood}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <div className="flex flex-col gap-2">
-                          <span>Horário</span>
-                          <select
-                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={selectedFilters.timeRange}
-                            onChange={(e) => handleFilterChange('timeRange', e.target.value)}
-                          >
-                            <option value="">Todos</option>
-                            {uniqueValues.timeRange.map((time) => (
-                              <option key={time} value={time}>{time}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredCrimes.map((crime) => (
-                      <tr 
-                        key={crime.objectid} 
-                        className="hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/crime/${crime['RO']}`)}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {crime['RO']}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                          {crime['Indicador estrategico']?.toLowerCase()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {crime['Municipio do fato (IBGE)']}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {crime['Bairro']}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {crime['Faixa horaria']}
-                        </td>
+                <div 
+                  ref={tableRef}
+                  className="max-h-[600px] overflow-y-auto" 
+                  style={{ height: '500px' }}
+                >
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                          <div className="flex flex-col gap-2">
+                            <span>Data</span>
+                            <input
+                              type="text"
+                              placeholder="Filtrar por data..."
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={selectedFilters.date}
+                              onChange={(e) => handleFilterChange('date', e.target.value)}
+                            />
+                          </div>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                          <div className="flex flex-col gap-2">
+                            <span>RO</span>
+                            <input
+                              type="text"
+                              placeholder="Filtrar por RO..."
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={selectedFilters.ro}
+                              onChange={(e) => handleFilterChange('ro', e.target.value)}
+                            />
+                          </div>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                          <div className="flex flex-col gap-2">
+                            <span>Tipo</span>
+                            <select
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={selectedFilters.type}
+                              onChange={(e) => handleFilterChange('type', e.target.value)}
+                            >
+                              <option value="">Todos</option>
+                              {uniqueValues.type.map((type) => (
+                                <option key={type} value={type} className="capitalize">{type}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                          <div className="flex flex-col gap-2">
+                            <span>Município</span>
+                            <select
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={selectedFilters.city}
+                              onChange={(e) => handleFilterChange('city', e.target.value)}
+                            >
+                              <option value="">Todos</option>
+                              {uniqueValues.city.map((city) => (
+                                <option key={city} value={city}>{city}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                          <div className="flex flex-col gap-2">
+                            <span>Bairro</span>
+                            <select
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={selectedFilters.neighborhood}
+                              onChange={(e) => handleFilterChange('neighborhood', e.target.value)}
+                            >
+                              <option value="">Todos</option>
+                              {uniqueValues.neighborhood.map((neighborhood) => (
+                                <option key={neighborhood} value={neighborhood}>{neighborhood}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                          <div className="flex flex-col gap-2">
+                            <span>Horário</span>
+                            <select
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={selectedFilters.timeRange}
+                              onChange={(e) => handleFilterChange('timeRange', e.target.value)}
+                            >
+                              <option value="">Todos</option>
+                              {uniqueValues.timeRange.map((time) => (
+                                <option key={time} value={time}>{time}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredCrimes.slice(0, visibleItems).map((crime) => (
+                        <tr 
+                          key={crime.objectid} 
+                          className="hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => navigate(`/crime/${crime['RO']}`)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {crime['RO']}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                            {crime['Indicador estrategico']?.toLowerCase()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {crime['Municipio do fato (IBGE)']}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {crime['Bairro']}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {crime['Faixa horaria']}
+                          </td>
+                        </tr>
+                      ))}
+                      {visibleItems < filteredCrimes.length && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                            Role para baixo para ver mais ocorrências...
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="mt-4 text-sm text-gray-600 text-right">
+                Mostrando {Math.min(visibleItems, filteredCrimes.length)} de {filteredCrimes.length} ocorrências
               </div>
             </div>
           </div>
