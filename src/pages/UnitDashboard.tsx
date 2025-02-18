@@ -486,6 +486,101 @@ export const UnitDashboard: React.FC = () => {
     }
   };
 
+  const generateAnalysis = useMemo(() => {
+    if (!crimes.length) return null;
+
+    // Contadores
+    const tipoCount: Record<string, number> = {};
+    const horarioCount: Record<string, { [tipo: string]: number }> = {};
+    const cidadeBairroCount: Record<string, { 
+      total: number, 
+      tipos: Record<string, number>,
+      bairros: Record<string, number>
+    }> = {};
+
+    // Primeiro, contar os tipos de crime e inicializar contadores
+    crimes.forEach(crime => {
+      const tipo = crime['Indicador estrategico']?.toLowerCase() || '';
+      const cidade = crime['Municipio do fato (IBGE)'];
+      const bairro = crime['Bairro'];
+      const horario = crime['Faixa horaria'];
+
+      // Contar tipos de crime
+      tipoCount[tipo] = (tipoCount[tipo] || 0) + 1;
+
+      // Inicializar ou atualizar contadores de horário por tipo
+      if (!horarioCount[horario]) {
+        horarioCount[horario] = {};
+      }
+      horarioCount[horario][tipo] = (horarioCount[horario][tipo] || 0) + 1;
+
+      // Inicializar ou atualizar contadores de cidade e bairro
+      if (!cidadeBairroCount[cidade]) {
+        cidadeBairroCount[cidade] = {
+          total: 0,
+          tipos: {},
+          bairros: {}
+        };
+      }
+      cidadeBairroCount[cidade].total++;
+      cidadeBairroCount[cidade].tipos[tipo] = (cidadeBairroCount[cidade].tipos[tipo] || 0) + 1;
+      cidadeBairroCount[cidade].bairros[bairro] = (cidadeBairroCount[cidade].bairros[bairro] || 0) + 1;
+    });
+
+    // Encontrar o tipo mais frequente
+    const tipoMaisFrequente = Object.entries(tipoCount)
+      .sort((a, b) => b[1] - a[1])[0];
+
+    // Encontrar os horários mais frequentes para o tipo mais frequente
+    const horariosMaisFrequentes = Object.entries(horarioCount)
+      .map(([horario, tipos]) => ({
+        horario,
+        count: tipos[tipoMaisFrequente[0]] || 0
+      }))
+      .filter(h => h.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    const maxHorarioCount = horariosMaisFrequentes[0]?.count || 0;
+    const horariosMaisFrequentesResult = {
+      items: horariosMaisFrequentes
+        .filter(h => h.count === maxHorarioCount)
+        .map(h => h.horario),
+      count: maxHorarioCount
+    };
+
+    // Encontrar as cidades com mais casos do tipo mais frequente
+    const cidadesMaisFrequentes = Object.entries(cidadeBairroCount)
+      .map(([cidade, dados]) => ({
+        cidade,
+        count: dados.tipos[tipoMaisFrequente[0]] || 0,
+        bairros: Object.entries(dados.bairros)
+          .sort((a, b) => b[1] - a[1])
+          .map(([bairro, count]) => ({ bairro, count }))
+      }))
+      .filter(c => c.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    const maxCidadeCount = cidadesMaisFrequentes[0]?.count || 0;
+    const cidadesMaisFrequentesResult = {
+      items: cidadesMaisFrequentes
+        .filter(c => c.count === maxCidadeCount)
+        .map(c => ({
+          nome: c.cidade,
+          bairros: c.bairros
+        })),
+      count: maxCidadeCount
+    };
+
+    return {
+      tipo: {
+        nome: tipoMaisFrequente[0],
+        total: tipoMaisFrequente[1]
+      },
+      horarios: horariosMaisFrequentesResult,
+      cidades: cidadesMaisFrequentesResult
+    };
+  }, [crimes]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
@@ -527,7 +622,8 @@ export const UnitDashboard: React.FC = () => {
   const pieData = Object.entries(crimesByType)
     .map(([type, value]) => ({
       name: type,
-      value
+      value,
+      percentage: ((value / crimes.length) * 100).toFixed(1)
     }))
     .sort((a, b) => b.value - a.value);
 
@@ -742,7 +838,7 @@ export const UnitDashboard: React.FC = () => {
                         cx="50%"
                         cy="50%"
                         outerRadius={150}
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        label={({ name, value, percentage }) => `${name} (${value} - ${percentage}%)`}
                       >
                         {pieData.map((entry) => (
                           <Cell 
@@ -799,7 +895,7 @@ export const UnitDashboard: React.FC = () => {
             </div>
 
             {/* Lista de Ocorrências */}
-            <div className="bg-gray-50 p-6 rounded-lg">
+            <div className="bg-gray-50 p-6 rounded-lg mb-8">
               <h2 className="text-lg font-semibold mb-4 text-black">Ocorrências {unit}</h2>
               <div className="overflow-x-auto">
                 <div 
@@ -938,6 +1034,65 @@ export const UnitDashboard: React.FC = () => {
                 Mostrando {Math.min(visibleItems, filteredCrimes.length)} de {filteredCrimes.length} ocorrências
               </div>
             </div>
+
+            {/* Análise Prévia */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h2 className="text-lg font-semibold mb-4 text-black">Análise Prévia</h2>
+              <div className="prose prose-sm">
+                {generateAnalysis && (
+                  <p className="text-gray-700 leading-relaxed">
+                    Em uma análise prévia da {unit}, verifica-se que o tipo de crime mais frequente é{' '}
+                    <span className="font-semibold capitalize">{generateAnalysis.tipo.nome}</span>{' '}
+                    com {generateAnalysis.tipo.total} casos do total de {crimes.length} ocorrências.
+                    {generateAnalysis.horarios.items.length > 0 && (
+                      <>
+                        <br />
+                        Estas ocorrências concentram-se{' '}
+                        {generateAnalysis.horarios.items.length > 1 ? (
+                          <>
+                            nos horários de <span className="font-semibold">{generateAnalysis.horarios.items.join(' e ')}</span>
+                          </>
+                        ) : (
+                          <>
+                            no horário de <span className="font-semibold">{generateAnalysis.horarios.items[0]}</span>
+                          </>
+                        )}
+                        {' '}({generateAnalysis.horarios.count} casos).
+                      </>
+                    )}
+                    {generateAnalysis.cidades.items.length > 0 && (
+                      <>
+                        <br />
+                        Geograficamente, {generateAnalysis.cidades.items.length > 1 ? 'destacam-se as cidades' : 'destaca-se a cidade'}{' '}
+                        {generateAnalysis.cidades.items.map((cidade, index, array) => (
+                          <>
+                            {index > 0 && index === array.length - 1 ? ' e ' : index > 0 ? ', ' : ''}
+                            <span key={cidade.nome} className="font-semibold">{cidade.nome}</span>
+                          </>
+                        ))}{' '}
+                        com {generateAnalysis.cidades.count} {generateAnalysis.cidades.count === 1 ? 'caso' : 'casos'}{' '}
+                        {generateAnalysis.cidades.items.map((cidade, cidadeIndex) => (
+                          <>
+                            {cidade.bairros.length > 0 && (
+                              <>
+                                {cidadeIndex === 0 ? `de ${generateAnalysis.tipo.nome} nos seguintes bairros: ` : ' e nos seguintes bairros: '}
+                                {cidade.bairros.map((b, idx, arr) => (
+                                  <>
+                                    {idx > 0 && idx === arr.length - 1 ? ' e ' : idx > 0 ? ', ' : ''}
+                                    {b.bairro} ({b.count} {b.count === 1 ? 'caso' : 'casos'})
+                                  </>
+                                ))}
+                              </>
+                            )}
+                          </>
+                        ))}.
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
