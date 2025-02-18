@@ -10,7 +10,7 @@ import { CrimeMap } from '../components/CrimeMap';
 import type { CrimeType, PoliceUnit } from '../types';
 import { supabaseAdmin } from '../lib/supabase';
 
-// Update the CrimeData type to match our heat map structure
+// Update CrimeData type to match the component requirements
 interface CrimeData {
   id: string;
   date: Date;
@@ -21,12 +21,12 @@ interface CrimeData {
   lng: number;
   region: string;
   bairros: string[];
+  target?: number;
+  shift?: string;
 }
 
-// Clean up unused imports and add type safety to CRIME_COLORS
 const CRIME_COLORS: Record<string, string> = {
   'Letalidade Violenta': '#ff7f0e',
-  'Roubo de Veículo': '#2ca02c',
   'Roubo de Rua': '#d62728',
   'Roubo de Carga': '#9467bd'
 } as const;
@@ -695,11 +695,13 @@ export const UnitDashboard: React.FC = () => {
             <div className="bg-gray-50 p-6 rounded-lg mb-8">
               <h2 className="text-lg font-semibold mb-4">Mapa de Calor</h2>
               <div className="h-[500px]">
-                <CrimeMap 
-                  data={mapData}
-                  center={unit ? UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] : undefined}
-                  zoom={unit ? UNIT_ZOOM[unit as keyof typeof UNIT_ZOOM] : undefined}
-                />
+                {mapData.length > 0 && unit && UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] && (
+                  <CrimeMap 
+                    data={mapData}
+                    center={UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS]}
+                    zoom={UNIT_ZOOM[unit as keyof typeof UNIT_ZOOM] || 10}
+                  />
+                )}
               </div>
             </div>
 

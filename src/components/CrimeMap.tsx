@@ -31,16 +31,21 @@ interface CrimeMapProps {
   zoom?: number;
 }
 
-export const CrimeMap: React.FC<CrimeMapProps> = ({ data, center, zoom = 10 }) => {
+export const CrimeMap: React.FC<CrimeMapProps> = ({ 
+  data = [], 
+  center, 
+  zoom = 10 
+}) => {
   const [hoveredCrimes, setHoveredCrimes] = useState<CrimeData[]>([]);
 
   // Calculate center based on data points if not provided
+  const defaultCenter = { lat: -22.9068, lng: -43.1729 }; // Default to Rio de Janeiro region
   const mapCenter = center || (data.length > 0
     ? {
         lat: data.reduce((sum, point) => sum + point.lat, 0) / data.length,
         lng: data.reduce((sum, point) => sum + point.lng, 0) / data.length
       }
-    : { lat: -22.9068, lng: -43.1729 }); // Default to Rio de Janeiro region
+    : defaultCenter);
 
   const getColor = (crimeType: CrimeType): string => {
     return CRIME_COLORS[crimeType] || '#000000';
@@ -61,9 +66,14 @@ export const CrimeMap: React.FC<CrimeMapProps> = ({ data, center, zoom = 10 }) =
     });
   };
 
+  if (!mapCenter || typeof mapCenter.lat !== 'number' || typeof mapCenter.lng !== 'number') {
+    return <div className="h-[500px] bg-gray-100 flex items-center justify-center">Mapa indisponível</div>;
+  }
+
   return (
     <div className="h-[500px] rounded-lg overflow-hidden border-2 border-gray-200">
       <MapContainer
+        key={`${mapCenter.lat}-${mapCenter.lng}-${zoom}`}
         center={[mapCenter.lat, mapCenter.lng]}
         zoom={zoom}
         style={{ height: '100%', width: '100%' }}
