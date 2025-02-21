@@ -8,7 +8,7 @@ import {
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import type { PoliceUnit } from '../types';
-import { supabase, supabaseAdmin } from '../lib/supabase';
+import { supabase, getSupabaseAdmin } from '../config/supabase';
 import { FiUpload, FiTrash2, FiSettings, FiLogOut, FiUsers } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { crimeService } from '../services/crimeService';
@@ -78,7 +78,7 @@ export const Dashboard: React.FC = () => {
     try {
       setError(null);
       
-      const { data: allCrimes, error } = await supabaseAdmin
+      const { data: allCrimes, error } = await getSupabaseAdmin()
         .from('crimes2')
         .select('*');
 
@@ -113,8 +113,8 @@ export const Dashboard: React.FC = () => {
       
       // Buscar crimes e metas em paralelo para melhor performance
       const [crimesResponse, targetsResponse] = await Promise.all([
-        supabaseAdmin.from('crimes2').select('*'),
-        supabaseAdmin.from('targets').select('*')
+        getSupabaseAdmin().from('crimes2').select('*'),
+        getSupabaseAdmin().from('targets').select('*')
       ]);
 
       if (crimesResponse.error) throw crimesResponse.error;
@@ -260,7 +260,7 @@ export const Dashboard: React.FC = () => {
     if (window.confirm('Tem certeza que deseja limpar todos os dados? Esta ação não pode ser desfeita.')) {
       try {
         // First get all the records
-        const { data: crimes, error: fetchError } = await supabaseAdmin
+        const { data: crimes, error: fetchError } = await getSupabaseAdmin()
           .from('crimes2')
           .select('objectid');
 
@@ -269,7 +269,7 @@ export const Dashboard: React.FC = () => {
         // Then delete them one by one
         if (crimes && crimes.length > 0) {
           const deletePromises = crimes.map(crime => 
-            supabaseAdmin
+            getSupabaseAdmin()
               .from('crimes2')
               .delete()
               .eq('objectid', crime.objectid)

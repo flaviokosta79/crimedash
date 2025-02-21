@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../config/supabase';
 
 export function Login() {
   const navigate = useNavigate();
@@ -31,11 +31,11 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6">
         <div>
-          <img src="/images/logos/5cpa.png" alt="Logo" className="mx-auto mb-4" />
-          <h2 className="mt-4 text-center text-4xl font-extrabold text-gray-900">
+          <img src="/images/logos/5cpa.png" alt="Logo" className="mx-auto h-22 w-auto mb-1" />
+          <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
             ANÁLISE CRIMINAL
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">

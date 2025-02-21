@@ -8,7 +8,7 @@ import {
 import { ArrowLeft } from 'lucide-react';
 import { CrimeMap } from '../components/CrimeMap';
 import type { CrimeType, PoliceUnit } from '../types';
-import { supabaseAdmin } from '../lib/supabase';
+import { supabase as supabaseAdmin } from '../config/supabase';
 
 // Update CrimeData type to match the component requirements
 interface CrimeData {
@@ -452,15 +452,12 @@ export const UnitDashboard: React.FC = () => {
         return;
       }
 
-      console.log('Sample crime data:', crimes?.[0]); // Debug log to see field names
-
       const newCardData = {
         letalidadeViolenta: 0,
         rouboDeVeiculo: 0,
         rouboDeRua: 0,
         rouboDeCarga: 0
       };
-
       crimes?.forEach((crime: any) => {
         const indicator = crime['Indicador estrategico']?.toLowerCase() || '';
         
@@ -1065,26 +1062,26 @@ export const UnitDashboard: React.FC = () => {
                         <br />
                         Geograficamente, {generateAnalysis.cidades.items.length > 1 ? 'destacam-se as cidades' : 'destaca-se a cidade'}{' '}
                         {generateAnalysis.cidades.items.map((cidade, index, array) => (
-                          <>
+                          <span key={`city-${cidade.nome}-${index}`}>
                             {index > 0 && index === array.length - 1 ? ' e ' : index > 0 ? ', ' : ''}
-                            <span key={cidade.nome} className="font-semibold">{cidade.nome}</span>
-                          </>
-                        ))}{' '}
+                            <span className="font-semibold">{cidade.nome}</span>
+                          </span>
+                        ))}
                         com {generateAnalysis.cidades.count} {generateAnalysis.cidades.count === 1 ? 'caso' : 'casos'}{' '}
                         {generateAnalysis.cidades.items.map((cidade, cidadeIndex) => (
-                          <>
+                          <span key={`city-details-${cidade.nome}-${cidadeIndex}`}>
                             {cidade.bairros.length > 0 && (
-                              <>
+                              <span>
                                 {cidadeIndex === 0 ? `de ${generateAnalysis.tipo.nome} nos seguintes bairros: ` : ' e nos seguintes bairros: '}
                                 {cidade.bairros.map((b, idx, arr) => (
-                                  <>
+                                  <span key={`bairro-${b.bairro}-${idx}`}>
                                     {idx > 0 && idx === arr.length - 1 ? ' e ' : idx > 0 ? ', ' : ''}
                                     {b.bairro} ({b.count} {b.count === 1 ? 'caso' : 'casos'})
-                                  </>
+                                  </span>
                                 ))}
-                              </>
+                              </span>
                             )}
-                          </>
+                          </span>
                         ))}.
                       </>
                     )}

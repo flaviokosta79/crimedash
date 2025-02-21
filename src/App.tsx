@@ -11,7 +11,7 @@ import { CrimeHistory } from './pages/CrimeHistory';
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Toaster position="top-right" />
       <Routes>
         {/* Rota raiz redireciona para login */}
@@ -50,9 +50,6 @@ function App() {
             <CrimeHistory />
           </PrivateRoute>
         } />
-
-        {/* Qualquer outra rota redireciona para login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

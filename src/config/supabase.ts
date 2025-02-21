@@ -8,26 +8,27 @@ if (!supabaseUrl || !supabaseKey || !supabaseServiceKey) {
   throw new Error('Faltam as variáveis de ambiente do Supabase');
 }
 
-// Criar uma única instância do cliente
+// Criar uma única instância do cliente regular
 const supabaseClient = createClient(supabaseUrl, supabaseKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   }
 });
 
-// Função para obter cliente com chave de serviço
-const getAdminClient = () => {
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  });
-};
+// Criar uma única instância do cliente admin com configurações otimizadas
+const supabaseAdminClient = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: sessionStorage, // Use sessionStorage instead of localStorage for admin
+    storageKey: 'supabase-admin-auth' // Unique storage key for admin client
+  }
+});
 
 // Exportar cliente padrão
 export const supabase = supabaseClient;
 
-// Exportar função que retorna cliente admin sob demanda
-export const getSupabaseAdmin = () => getAdminClient();
+// Exportar cliente admin
+export const getSupabaseAdmin = () => supabaseAdminClient;

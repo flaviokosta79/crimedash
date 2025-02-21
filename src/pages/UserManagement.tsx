@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabaseAdmin } from '../lib/supabase';
+import { getSupabaseAdmin } from '../config/supabase';
 import toast from 'react-hot-toast';
 import { FiUsers, FiUserPlus, FiTrash2, FiArrowLeft } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +26,7 @@ export function UserManagement() {
 
   const fetchUsers = async () => {
     try {
+      const supabaseAdmin = getSupabaseAdmin();
       const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
       if (error) throw error;
       
@@ -48,6 +49,7 @@ export function UserManagement() {
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const supabaseAdmin = getSupabaseAdmin();
       const { data: { user }, error } = await supabaseAdmin.auth.admin.createUser({
         email: newUserEmail,
         password: newUserPassword,
@@ -70,6 +72,7 @@ export function UserManagement() {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
+      const supabaseAdmin = getSupabaseAdmin();
       const { error } = await supabaseAdmin.auth.admin.updateUserById(
         userId,
         { user_metadata: { role: newRole } }
@@ -88,6 +91,7 @@ export function UserManagement() {
     if (!window.confirm('Tem certeza que deseja excluir este usuário?')) return;
 
     try {
+      const supabaseAdmin = getSupabaseAdmin();
       const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (error) throw error;
 
@@ -97,7 +101,6 @@ export function UserManagement() {
       toast.error(`Erro ao excluir usuário: ${error.message}`);
     }
   };
-
   // Ordenar usuários para que os admins apareçam primeiro
   const sortedUsers = [...users].sort((a, b) => {
     if (a.role === 'admin' && b.role !== 'admin') return -1;
@@ -188,7 +191,7 @@ export function UserManagement() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Lista de Usuários</h2>
                 <span className="text-sm text-gray-500">
-                  Total: {sortedUsers.length} usuários
+                  Total: {users.length} usuários
                 </span>
               </div>
               {loading ? (
@@ -215,7 +218,7 @@ export function UserManagement() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {sortedUsers.map((user) => (
+                      {users.map((user) => (
                         <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
