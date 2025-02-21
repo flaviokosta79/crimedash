@@ -1060,11 +1060,11 @@ export const UnitDashboard: React.FC = () => {
                     {generateAnalysis.cidades.items.length > 0 && (
                       <>
                         <br />
-                        Geograficamente, {generateAnalysis.cidades.items.length > 1 ? 'destacam-se as cidades' : 'destaca-se a cidade'}{' '}
+                        Geograficamente, {generateAnalysis.cidades.items.length > 1 ? 'destacam-se as cidades' : 'destaca-se a cidade de '}{' '}
                         {generateAnalysis.cidades.items.map((cidade, index, array) => (
                           <span key={`city-${cidade.nome}-${index}`}>
                             {index > 0 && index === array.length - 1 ? ' e ' : index > 0 ? ', ' : ''}
-                            <span className="font-semibold">{cidade.nome}</span>
+                            <span className="font-semibold">{cidade.nome} </span>
                           </span>
                         ))}
                         com {generateAnalysis.cidades.count} {generateAnalysis.cidades.count === 1 ? 'caso' : 'casos'}{' '}

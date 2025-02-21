@@ -82,7 +82,7 @@ export const crimeService = {
 
           // Limpar e validar campos de texto
           const cleanText = (text: string | number | undefined) => {
-            if (text === undefined || text === null) return '';
+            if (text === undefined || text === null || String(text).trim() === '') return 'N/A';
             return String(text).trim().replace(/\s+/g, ' ');
           };
 
