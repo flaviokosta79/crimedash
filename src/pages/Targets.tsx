@@ -41,7 +41,7 @@ export function Targets() {
 
   const units = [
     { type: 'AISP', numbers: ['10', '28', '33', '37', '43'] },
-    { type: 'RISP', numbers: ['5'] }
+    { type: 'RISP', numbers: ['1', '2', '3', '4', '5', '6', '7'] }
   ];
 
   // Mapeamento dos ícones por tipo de crime
@@ -243,80 +243,162 @@ export function Targets() {
             </h2>
           </div>
 
-          {/* RISP Card */}
+          {/* RISP Cards */}
           <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            {Object.entries(targetsByUnit)
-              .filter(([unit]) => unit.startsWith('RISP'))
-              .map(([unit, unitTargets]) => (
-                <div key={unit} className="bg-gray-800 rounded-lg shadow-lg p-6 text-white w-full">
-                  <h2 className="text-2xl font-bold mb-6 text-center">{unit}</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-                    {unitTargets.map((target) => (
-                      <div key={target.id} className="bg-gray-700 rounded-lg p-4 shadow-md">
-                        <div className="flex flex-col space-y-4">
-                          <div className="flex items-center justify-between">
+            {/* RISP 5 Card */}
+            <div className="mb-8">
+              {Object.entries(targetsByUnit)
+                .filter(([unit]) => unit === 'RISP 5')
+                .map(([unit, unitTargets]) => (
+                  <div key={unit} className="bg-gray-800 rounded-lg shadow-lg p-6 text-white w-full">
+                    <h2 className="text-2xl font-bold mb-6 text-center">{unit}</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {unitTargets.map((target) => (
+                        <div key={target.id} className="bg-gray-700 rounded-lg p-4 shadow-md">
+                          <div className="flex flex-col space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="bg-gray-600 p-2 rounded-lg">
+                                  <img 
+                                    src={crimeIcons[target.crime_type]} 
+                                    alt={target.crime_type}
+                                    className="w-6 h-6"
+                                  />
+                                </div>
+                                <span className="capitalize text-lg font-medium">{target.crime_type}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between border-t border-gray-600 pt-4">
+                              {editingTarget?.id === target.id ? (
+                                <div className="flex items-center gap-2 w-full">
+                                  <input
+                                    type="number"
+                                    className="w-full px-3 py-2 text-gray-900 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={editingTarget.target_value}
+                                    onChange={(e) => setEditingTarget({
+                                      ...editingTarget,
+                                      target_value: parseInt(e.target.value) || 0
+                                    })}
+                                    min="0"
+                                  />
+                                  <button
+                                    className="p-2 bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
+                                    onClick={() => updateTarget(editingTarget)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    className="p-2 bg-gray-500 rounded-lg hover:bg-gray-600 transition-colors"
+                                    onClick={() => setEditingTarget(null)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="text-2xl font-bold">{target.target_value}</span>
+                                  <button
+                                    className="p-2 bg-gray-600 rounded-lg hover:bg-gray-500 transition-colors"
+                                    onClick={() => setEditingTarget(target)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Other RISPs Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Object.entries(targetsByUnit)
+                .filter(([unit]) => unit.startsWith('RISP') && unit !== 'RISP 5')
+                .sort(([unitA], [unitB]) => {
+                  const numberA = parseInt(unitA.split(' ')[1]);
+                  const numberB = parseInt(unitB.split(' ')[1]);
+                  return numberA - numberB;
+                })
+                .map(([unit, unitTargets]) => (
+                  <div key={unit} className="bg-gray-800/90 rounded-lg shadow-lg p-4 text-white">
+                    <h2 className="text-xl font-bold mb-4 text-center">{unit}</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      {unitTargets.map((target) => (
+                        <div key={target.id} className="bg-gray-700 rounded-lg p-3 shadow-md">
+                          <div className="flex flex-col space-y-3">
                             <div className="flex items-center gap-2">
-                              <div className="bg-gray-600 p-2 rounded-lg">
+                              <div className="bg-gray-600 p-1.5 rounded-lg">
                                 <img 
                                   src={crimeIcons[target.crime_type]} 
                                   alt={target.crime_type}
-                                  className="w-6 h-6"
+                                  className="w-5 h-5"
                                 />
                               </div>
-                              <span className="capitalize text-lg font-medium">{target.crime_type}</span>
+                              <span className="capitalize text-sm font-medium">{target.crime_type}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between border-t border-gray-600 pt-2">
+                              {editingTarget?.id === target.id ? (
+                                <div className="flex items-center gap-1 w-full">
+                                  <input
+                                    type="number"
+                                    className="w-full px-2 py-1 text-gray-900 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={editingTarget.target_value}
+                                    onChange={(e) => setEditingTarget({
+                                      ...editingTarget,
+                                      target_value: parseInt(e.target.value) || 0
+                                    })}
+                                    min="0"
+                                  />
+                                  <button
+                                    className="p-1 bg-green-500 rounded hover:bg-green-600 transition-colors"
+                                    onClick={() => updateTarget(editingTarget)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    className="p-1 bg-gray-500 rounded hover:bg-gray-600 transition-colors"
+                                    onClick={() => setEditingTarget(null)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="text-lg font-bold">{target.target_value}</span>
+                                  <button
+                                    className="p-1 bg-gray-600 rounded hover:bg-gray-500 transition-colors"
+                                    onClick={() => setEditingTarget(target)}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
-
-                          <div className="flex items-center justify-between border-t border-gray-600 pt-4">
-                            {editingTarget?.id === target.id ? (
-                              <div className="flex items-center gap-2 w-full">
-                                <input
-                                  type="number"
-                                  className="w-full px-3 py-2 text-gray-900 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  value={editingTarget.target_value}
-                                  onChange={(e) => setEditingTarget({
-                                    ...editingTarget,
-                                    target_value: parseInt(e.target.value) || 0
-                                  })}
-                                  min="0"
-                                />
-                                <button
-                                  className="p-2 bg-green-500 rounded-lg hover:bg-green-600 transition-colors"
-                                  onClick={() => updateTarget(editingTarget)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                </button>
-                                <button
-                                  className="p-2 bg-gray-500 rounded-lg hover:bg-gray-600 transition-colors"
-                                  onClick={() => setEditingTarget(null)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between w-full">
-                                <span className="text-2xl font-bold">{target.target_value}</span>
-                                <button
-                                  className="p-2 bg-gray-600 rounded-lg hover:bg-gray-500 transition-colors"
-                                  onClick={() => setEditingTarget(target)}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                  </svg>
-                                </button>
-                              </div>
-                            )}
-                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+            </div>
           </div>
 
           {/* AISP Cards */}

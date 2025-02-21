@@ -4,7 +4,7 @@ DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON targets;
 DROP POLICY IF EXISTS "Enable update for authenticated users only" ON targets;
 
 -- Drop the existing table if it exists
-DROP TABLE IF EXISTS targets;
+DROP TABLE IF EXISTS targets CASCADE;
 
 -- Create the targets table
 CREATE TABLE targets (
@@ -48,11 +48,47 @@ CREATE POLICY "Enable update for all users" ON targets
 
 -- Insert initial data for 1º semester 2025
 INSERT INTO targets (unit, crime_type, target_value, year, semester) VALUES
+-- 1ª RISP
+('RISP 1', 'letalidade violenta', 15, 2025, 1),
+('RISP 1', 'roubo de veículo', 50, 2025, 1),
+('RISP 1', 'roubo de rua', 100, 2025, 1),
+('RISP 1', 'roubo de carga', 20, 2025, 1),
+
+-- 2ª RISP
+('RISP 2', 'letalidade violenta', 15, 2025, 1),
+('RISP 2', 'roubo de veículo', 50, 2025, 1),
+('RISP 2', 'roubo de rua', 100, 2025, 1),
+('RISP 2', 'roubo de carga', 20, 2025, 1),
+
+-- 3ª RISP
+('RISP 3', 'letalidade violenta', 15, 2025, 1),
+('RISP 3', 'roubo de veículo', 50, 2025, 1),
+('RISP 3', 'roubo de rua', 100, 2025, 1),
+('RISP 3', 'roubo de carga', 20, 2025, 1),
+
+-- 4ª RISP
+('RISP 4', 'letalidade violenta', 15, 2025, 1),
+('RISP 4', 'roubo de veículo', 50, 2025, 1),
+('RISP 4', 'roubo de rua', 100, 2025, 1),
+('RISP 4', 'roubo de carga', 20, 2025, 1),
+
 -- 5ª RISP
 ('RISP 5', 'letalidade violenta', 15, 2025, 1),
 ('RISP 5', 'roubo de veículo', 50, 2025, 1),
 ('RISP 5', 'roubo de rua', 100, 2025, 1),
 ('RISP 5', 'roubo de carga', 20, 2025, 1),
+
+-- 6ª RISP
+('RISP 6', 'letalidade violenta', 15, 2025, 1),
+('RISP 6', 'roubo de veículo', 50, 2025, 1),
+('RISP 6', 'roubo de rua', 100, 2025, 1),
+('RISP 6', 'roubo de carga', 20, 2025, 1),
+
+-- 7ª RISP
+('RISP 7', 'letalidade violenta', 15, 2025, 1),
+('RISP 7', 'roubo de veículo', 50, 2025, 1),
+('RISP 7', 'roubo de rua', 100, 2025, 1),
+('RISP 7', 'roubo de carga', 20, 2025, 1),
 
 -- 10º BPM
 ('AISP 10', 'letalidade violenta', 3, 2025, 1),
