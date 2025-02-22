@@ -5,6 +5,15 @@ export type PoliceUnit =
   | 'AISP 37'
   | 'AISP 43';
 
+export type PoliceRegion = 
+  | 'RISP 1'
+  | 'RISP 2'
+  | 'RISP 3'
+  | 'RISP 4'
+  | 'RISP 5'
+  | 'RISP 6'
+  | 'RISP 7';
+
 export type CrimeType = 
   | 'Letalidade Violenta'
   | 'Roubo de Veículo'
@@ -13,11 +22,8 @@ export type CrimeType =
 
 export type TimeRange = 
   | '7D'  // Últimos 7 dias
-  | '15D' // Últimos 15 dias
   | '30D' // Últimos 30 dias
-  | '90D' // Últimos 90 dias
-  | '180D' // Últimos 180 dias
-  | '1Y';  // Último ano
+  | '90D' // Últimos 90 dias;
 
 export interface Filters {
   timeRange: TimeRange;
@@ -26,11 +32,12 @@ export interface Filters {
 
 export interface CrimeData {
   id: string;
-  date: Date;
+  date: string;
   type: CrimeType;
   unit: PoliceUnit;
+  region: PoliceRegion;
   count: number;
+  target: number;
   lat: number;
   lng: number;
-  region: string;
 }

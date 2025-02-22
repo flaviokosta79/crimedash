@@ -80,7 +80,8 @@ export const Dashboard: React.FC = () => {
       
       const { data: allCrimes, error } = await getSupabaseAdmin()
         .from('crimes2')
-        .select('*');
+        .select('*')
+        .eq('RISP do fato', 'RISP 5'); // Filtrando apenas crimes da RISP 5
 
       if (error) throw error;
 
@@ -95,12 +96,29 @@ export const Dashboard: React.FC = () => {
   const processTargets = (data: any[]) => {
     const targetsByUnit: Record<string, Record<string, number>> = {};
     
+    // Função para normalizar os tipos de crime
+    const normalizeCrimeType = (type: string) => {
+      const normalized = type.toLowerCase();
+      switch (normalized) {
+        case 'letalidade violenta':
+          return 'Letalidade Violenta';
+        case 'roubo de rua':
+          return 'Roubo de Rua';
+        case 'roubo de veículo':
+          return 'Roubo de Veículo';
+        case 'roubo de carga':
+          return 'Roubo de Carga';
+        default:
+          return type;
+      }
+    };
+    
     data.forEach((target: any) => {
       if (!targetsByUnit[target.unit]) {
         targetsByUnit[target.unit] = {};
       }
-      // Corrigido de target.indicator para target.crime_type e target.value para target.target_value
-      targetsByUnit[target.unit][target.crime_type] = target.target_value;
+      const normalizedType = normalizeCrimeType(target.crime_type);
+      targetsByUnit[target.unit][normalizedType] = target.target_value;
     });
     
     return targetsByUnit;
@@ -111,19 +129,29 @@ export const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Buscar crimes e metas em paralelo para melhor performance
       const [crimesResponse, targetsResponse] = await Promise.all([
-        getSupabaseAdmin().from('crimes2').select('*'),
-        getSupabaseAdmin().from('targets').select('*')
+        getSupabaseAdmin()
+          .from('crimes2')
+          .select('*')
+          .eq('RISP do fato', 'RISP 5')
+          .in('Indicador estrategico', ['letalidade violenta', 'roubo de rua', 'roubo de veículo', 'roubo de carga']),
+        getSupabaseAdmin()
+          .from('targets')
+          .select('*')
+          .eq('year', new Date().getFullYear())
+          .eq('semester', new Date().getMonth() < 6 ? 1 : 2)
       ]);
 
       if (crimesResponse.error) throw crimesResponse.error;
       if (targetsResponse.error) throw targetsResponse.error;
 
+      console.log('Total de registros da RISP 5:', crimesResponse.data.length);
+      
       const processedData = processCardData(crimesResponse.data);
+      console.log('Dados processados:', processedData);
+      
       setCardData(processedData);
       
-      // Processar e setar as metas
       const processedTargets = processTargets(targetsResponse.data);
       setTargets(processedTargets);
     } catch (error: any) {
@@ -169,14 +197,25 @@ export const Dashboard: React.FC = () => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
+    // Filtrar apenas crimes com indicador estratégico válido
+    const validCrimes = data.filter(crime => {
+      const indicator = crime['Indicador estrategico']?.toLowerCase();
+      return (
+        indicator === 'letalidade violenta' ||
+        indicator === 'roubo de rua' ||
+        indicator === 'roubo de veículo' ||
+        indicator === 'roubo de carga'
+      );
+    });
+
     // Preencher com os dados reais de crimes
-    data.forEach((item) => {
-      const dia = String(item['Dia do registro']).padStart(2, '0');
-      const mes = String(item['Mes do registro']).padStart(2, '0');
-      const ano = item['Ano do registro'];
+    validCrimes.forEach((crime) => {
+      const dia = String(crime['Dia do registro']).padStart(2, '0');
+      const mes = String(crime['Mes do registro']).padStart(2, '0');
+      const ano = crime['Ano do registro'];
       const date = `${ano}-${mes}-${dia}`;
-      if (dateMap[date]) {
-        dateMap[date][item['AISP do fato']] = (dateMap[date][item['AISP do fato']] || 0) + 1;
+      if (dateMap[date] && crime['AISP do fato']) {
+        dateMap[date][crime['AISP do fato']] = (dateMap[date][crime['AISP do fato']] || 0) + 1;
       }
     });
 
@@ -200,26 +239,41 @@ export const Dashboard: React.FC = () => {
     // Processar todos os crimes para os totais
     data.forEach((crime: any) => {
       const unit = crime['AISP do fato'];
-      const indicator = crime['Indicador estrategico']?.toLowerCase() || '';
+      const indicator = crime['Indicador estrategico']?.toLowerCase();
       
       if (unit && unitTotals[unit]) {
-        unitTotals[unit].total += 1;
-
-        // Incrementar contadores específicos
-        if (indicator.includes('letalidade')) {
-          unitTotals[unit].letalidadeViolenta += 1;
+        // Incrementar apenas baseado no indicador estratégico
+        switch (indicator) {
+          case 'letalidade violenta':
+            unitTotals[unit].letalidadeViolenta += 1;
+            break;
+          case 'roubo de rua':
+            unitTotals[unit].rouboDeRua += 1;
+            break;
+          case 'roubo de veículo':
+            unitTotals[unit].rouboDeVeiculo += 1;
+            break;
+          case 'roubo de carga':
+            unitTotals[unit].rouboDeCarga += 1;
+            break;
         }
-        if (indicator.includes('roubo de rua')) {
-          unitTotals[unit].rouboDeRua += 1;
-        }
-        if (indicator.includes('roubo de veículo')) {
-          unitTotals[unit].rouboDeVeiculo += 1;
-        }
-        if (indicator.includes('roubo de carga')) {
-          unitTotals[unit].rouboDeCarga += 1;
-        }
+        // Calcular o total após o switch
+        unitTotals[unit].total = 
+          unitTotals[unit].letalidadeViolenta +
+          unitTotals[unit].rouboDeRua +
+          unitTotals[unit].rouboDeVeiculo +
+          unitTotals[unit].rouboDeCarga;
       }
     });
+
+    // Adicionar totais da RISP 5
+    unitTotals['RISP 5'] = {
+      total: Object.values(unitTotals).reduce((sum: number, unit: any) => sum + unit.total, 0),
+      letalidadeViolenta: Object.values(unitTotals).reduce((sum: number, unit: any) => sum + unit.letalidadeViolenta, 0),
+      rouboDeRua: Object.values(unitTotals).reduce((sum: number, unit: any) => sum + unit.rouboDeRua, 0),
+      rouboDeVeiculo: Object.values(unitTotals).reduce((sum: number, unit: any) => sum + unit.rouboDeVeiculo, 0),
+      rouboDeCarga: Object.values(unitTotals).reduce((sum: number, unit: any) => sum + unit.rouboDeCarga, 0)
+    };
 
     return unitTotals;
   };
@@ -259,24 +313,12 @@ export const Dashboard: React.FC = () => {
   const handleClearData = async () => {
     if (window.confirm('Tem certeza que deseja limpar todos os dados? Esta ação não pode ser desfeita.')) {
       try {
-        // First get all the records
-        const { data: crimes, error: fetchError } = await getSupabaseAdmin()
+        const { error: deleteError } = await getSupabaseAdmin()
           .from('crimes2')
-          .select('objectid');
+          .delete()
+          .neq('objectid', '0'); // usando neq para garantir que a query afete todas as linhas
 
-        if (fetchError) throw fetchError;
-
-        // Then delete them one by one
-        if (crimes && crimes.length > 0) {
-          const deletePromises = crimes.map(crime => 
-            getSupabaseAdmin()
-              .from('crimes2')
-              .delete()
-              .eq('objectid', crime.objectid)
-          );
-
-          await Promise.all(deletePromises);
-        }
+        if (deleteError) throw deleteError;
 
         await fetchCardData();
         await fetchGraphData();
@@ -396,13 +438,14 @@ export const Dashboard: React.FC = () => {
                             const file = e.target.files?.[0];
                             if (file) {
                               try {
+                                toast.loading('Importando dados...', { id: 'import' });
                                 await crimeService.importXLSX(file);
-                                fetchCardData();
-                                fetchGraphData();
-                                alert('Dados importados com sucesso!');
-                              } catch (error) {
+                                await fetchCardData();
+                                await fetchGraphData();
+                                toast.success('Dados importados com sucesso!', { id: 'import' });
+                              } catch (error: any) {
                                 console.error('Erro ao importar arquivo:', error);
-                                alert('Erro ao importar arquivo. Verifique o console para mais detalhes.');
+                                toast.error(`Erro ao importar arquivo: ${error.message}`, { id: 'import' });
                               } finally {
                                 if (fileInputRef.current) {
                                   fileInputRef.current.value = '';
@@ -434,7 +477,9 @@ export const Dashboard: React.FC = () => {
                 <div className="grid grid-cols-4 gap-8 max-w-4xl mx-auto">
                   <div className="flex flex-col items-center">
                     <div className={`${
-                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.letalidadeViolenta || 0), 0) > (targets['RISP 5']?.['letalidade violenta'] || 0) 
+                      Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.letalidadeViolenta || 0), 0) > (targets['RISP 5']?.['letalidade violenta'] || 0) 
                       ? 'bg-red-600' 
                       : 'bg-green-600'
                     } rounded-full p-4 mb-4`}>
@@ -446,19 +491,25 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Letalidade Violenta</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.letalidadeViolenta || 0), 0)}
+                      {Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.letalidadeViolenta || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['letalidade violenta'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.letalidadeViolenta || 0), 0) - (targets['RISP 5']?.['letalidade violenta'] || 0))}
+                      Diferença: {(Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.letalidadeViolenta || 0), 0) - (targets['RISP 5']?.['letalidade violenta'] || 0))}
                     </span>
                   </div>
 
                   <div className="flex flex-col items-center">
                     <div className={`${
-                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeVeiculo || 0), 0) > (targets['RISP 5']?.['roubo de veículo'] || 0)
+                      Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeVeiculo || 0), 0) > (targets['RISP 5']?.['roubo de veículo'] || 0)
                       ? 'bg-red-600' 
                       : 'bg-green-600'
                     } rounded-full p-4 mb-4`}>
@@ -470,19 +521,25 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Veículo</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeVeiculo || 0), 0)}
+                      {Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeVeiculo || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de veículo'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeVeiculo || 0), 0) - (targets['RISP 5']?.['roubo de veículo'] || 0))}
+                      Diferença: {(Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeVeiculo || 0), 0) - (targets['RISP 5']?.['roubo de veículo'] || 0))}
                     </span>
                   </div>
 
                   <div className="flex flex-col items-center">
                     <div className={`${
-                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeRua || 0), 0) > (targets['RISP 5']?.['roubo de rua'] || 0)
+                      Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeRua || 0), 0) > (targets['RISP 5']?.['roubo de rua'] || 0)
                       ? 'bg-red-600' 
                       : 'bg-green-600'
                     } rounded-full p-4 mb-4`}>
@@ -494,19 +551,25 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Rua</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeRua || 0), 0)}
+                      {Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeRua || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de rua'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeRua || 0), 0) - (targets['RISP 5']?.['roubo de rua'] || 0))}
+                      Diferença: {(Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeRua || 0), 0) - (targets['RISP 5']?.['roubo de rua'] || 0))}
                     </span>
                   </div>
 
                   <div className="flex flex-col items-center">
                     <div className={`${
-                      Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeCarga || 0), 0) > (targets['RISP 5']?.['roubo de carga'] || 0)
+                      Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeCarga || 0), 0) > (targets['RISP 5']?.['roubo de carga'] || 0)
                       ? 'bg-red-600' 
                       : 'bg-green-600'
                     } rounded-full p-4 mb-4`}>
@@ -518,13 +581,17 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <span className="text-sm uppercase mb-2">Roubo de Carga</span>
                     <span className="text-3xl font-bold mb-2">
-                      {Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeCarga || 0), 0)}
+                      {Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeCarga || 0), 0)}
                     </span>
                     <span className="text-sm">
                       Meta: {targets['RISP 5']?.['roubo de carga'] || 0}
                     </span>
                     <span className="text-sm text-gray-400">
-                      Diferença: {(Object.values(cardData).reduce((sum, unit: any) => sum + (unit?.rouboDeCarga || 0), 0) - (targets['RISP 5']?.['roubo de carga'] || 0))}
+                      Diferença: {(Object.entries(cardData)
+                        .filter(([unit]) => unit.startsWith('AISP'))
+                        .reduce((sum, [_, unit]: [string, any]) => sum + (unit?.rouboDeCarga || 0), 0) - (targets['RISP 5']?.['roubo de carga'] || 0))}
                     </span>
                   </div>
                 </div>
@@ -534,7 +601,7 @@ export const Dashboard: React.FC = () => {
             {/* Battalion Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
               {Object.entries(cardData)
-                .filter(([unit]) => unit !== 'null' && unit !== null)
+                .filter(([unit]) => unit.startsWith('AISP'))
                 .map(([unit, stats]: [string, any]) => (
                 <Link
                   key={unit}
