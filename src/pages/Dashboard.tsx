@@ -98,29 +98,55 @@ export const Dashboard: React.FC = () => {
     
     // Função para normalizar os tipos de crime
     const normalizeCrimeType = (type: string) => {
-      const normalized = type.toLowerCase();
+      const normalized = type.toLowerCase().trim();
       switch (normalized) {
         case 'letalidade violenta':
-          return 'Letalidade Violenta';
+        case 'letalidadeviolenta':
+          return 'letalidade violenta';
         case 'roubo de rua':
-          return 'Roubo de Rua';
+        case 'rouboderua':
+          return 'roubo de rua';
         case 'roubo de veículo':
-          return 'Roubo de Veículo';
+        case 'roubo de veiculo':
+        case 'roubodeveiculo':
+          return 'roubo de veículo';
         case 'roubo de carga':
-          return 'Roubo de Carga';
+        case 'roubodecarga':
+          return 'roubo de carga';
         default:
-          return type;
+          return normalized;
       }
     };
     
-    data.forEach((target: any) => {
-      if (!targetsByUnit[target.unit]) {
-        targetsByUnit[target.unit] = {};
-      }
-      const normalizedType = normalizeCrimeType(target.crime_type);
-      targetsByUnit[target.unit][normalizedType] = target.target_value;
+    // Debug
+    console.log('Dados recebidos para processamento:', data);
+    
+    // Inicializar todas as unidades com valores zero
+    ['RISP 5', 'AISP 10', 'AISP 28', 'AISP 33', 'AISP 37', 'AISP 43'].forEach(unit => {
+      targetsByUnit[unit] = {
+        'letalidade violenta': 0,
+        'roubo de rua': 0,
+        'roubo de veículo': 0,
+        'roubo de carga': 0
+      };
     });
     
+    // Preencher com os dados existentes
+    data.forEach((target: any) => {
+      const normalizedType = normalizeCrimeType(target.crime_type);
+      console.log('Processando target:', {
+        original: target.crime_type,
+        normalized: normalizedType,
+        unit: target.unit,
+        value: target.target_value
+      });
+      
+      if (targetsByUnit[target.unit] && target.target_value !== null) {
+        targetsByUnit[target.unit][normalizedType] = target.target_value;
+      }
+    });
+    
+    console.log('Resultado do processamento:', targetsByUnit);
     return targetsByUnit;
   };
 
@@ -129,30 +155,51 @@ export const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      const currentMonth = new Date().getMonth() + 1;
+      const currentSemester = currentMonth <= 6 ? 1 : 2;
+      const currentYear = new Date().getFullYear();
+      
+      console.log('Buscando dados com os parâmetros:', {
+        year: currentYear,
+        semester: currentSemester
+      });
+
       const [crimesResponse, targetsResponse] = await Promise.all([
-        getSupabaseAdmin()
+        supabase
           .from('crimes2')
           .select('*')
           .eq('RISP do fato', 'RISP 5')
           .in('Indicador estrategico', ['letalidade violenta', 'roubo de rua', 'roubo de veículo', 'roubo de carga']),
-        getSupabaseAdmin()
+        supabase
           .from('targets')
           .select('*')
-          .eq('year', new Date().getFullYear())
-          .eq('semester', new Date().getMonth() < 6 ? 1 : 2)
+          .eq('year', currentYear)
+          .eq('semester', currentSemester)
       ]);
 
-      if (crimesResponse.error) throw crimesResponse.error;
-      if (targetsResponse.error) throw targetsResponse.error;
+      if (crimesResponse.error) {
+        console.error('Erro na busca de crimes:', crimesResponse.error);
+        throw crimesResponse.error;
+      }
+      if (targetsResponse.error) {
+        console.error('Erro na busca de metas:', targetsResponse.error);
+        throw targetsResponse.error;
+      }
 
-      console.log('Total de registros da RISP 5:', crimesResponse.data.length);
-      
+      console.log('Dados recebidos:', {
+        crimes: crimesResponse.data?.length,
+        targets: targetsResponse.data
+      });
+
       const processedData = processCardData(crimesResponse.data);
-      console.log('Dados processados:', processedData);
+      const processedTargets = processTargets(targetsResponse.data || []);
       
+      console.log('Dados processados:', {
+        cardData: processedData,
+        targets: processedTargets
+      });
+
       setCardData(processedData);
-      
-      const processedTargets = processTargets(targetsResponse.data);
       setTargets(processedTargets);
     } catch (error: any) {
       console.error('Erro ao buscar dados dos cards:', error);
@@ -347,15 +394,77 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      await fetchCardData();
-      await fetchGraphData();
+      try {
+        const currentMonth = new Date().getMonth() + 1;
+        const currentSemester = currentMonth <= 6 ? 1 : 2;
+        const currentYear = new Date().getFullYear();
+
+        console.log('Buscando metas para:', {
+          year: currentYear,
+          semester: currentSemester
+        });
+
+        const { data: targetsData, error } = await supabase
+          .from('targets')
+          .select('*')
+          .eq('year', currentYear)
+          .eq('semester', currentSemester);
+
+        console.log('Metas recebidas:', targetsData);
+
+        if (error) {
+          console.error('Erro ao buscar metas:', error);
+          return;
+        }
+
+        const processedTargets = processTargets(targetsData || []);
+        console.log('Metas processadas:', processedTargets);
+        
+        setTargets(processedTargets);
+      } catch (err) {
+        console.error('Erro no loadData:', err);
+      }
     };
+
     loadData();
+    fetchCardData();
   }, []);
 
   useEffect(() => {
     fetchGraphData();
   }, [timeRange]);
+
+  useEffect(() => {
+    const fetchTargets = async () => {
+      try {
+        const currentMonth = new Date().getMonth() + 1;
+        const currentSemester = currentMonth <= 6 ? 1 : 2;
+        const currentYear = new Date().getFullYear();
+        
+        const { data: targetsData, error } = await supabase
+          .from('targets')
+          .select('*')
+          .eq('year', currentYear)
+          .eq('semester', currentSemester);
+
+        if (error) throw error;
+        
+        const targetsByUnit: Record<string, Record<string, number>> = {};
+        targetsData?.forEach((target) => {
+          if (!targetsByUnit[target.unit]) {
+            targetsByUnit[target.unit] = {};
+          }
+          targetsByUnit[target.unit][target.crime_type.toLowerCase()] = target.target_value;
+        });
+
+        setTargets(targetsByUnit);
+      } catch (err: any) {
+        toast.error('Erro ao carregar metas: ' + err.message);
+      }
+    };
+
+    fetchTargets();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -399,12 +508,17 @@ export const Dashboard: React.FC = () => {
       <div className="py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid gap-6">
-            {/* CPA Total Card */}
+            {/* CPA Total Card com mês atual */}
             <div className="mb-8">
               <div className="bg-gray-800 text-white rounded-lg p-6 shadow-lg">
                 <div className="flex justify-between items-center mb-8">
                   <div className="flex-grow text-center">
-                    <h3 className="text-2xl font-semibold">5ª RISP - Total de Ocorrências</h3>
+                    <h3 className="text-2xl font-semibold">
+                      5ª RISP - Total de Ocorrências
+                      <span className="block text-lg text-gray-300 mt-1">
+                        {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                      </span>
+                    </h3>
                   </div>
                   <div className="flex items-center gap-4">
                     {isAdmin && (
