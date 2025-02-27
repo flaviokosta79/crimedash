@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { ImportButton } from '../components/ImportButton';
 import { TimeRangeSelector } from '../components/TimeRangeSelector';
+import { EnvironmentSwitcherButton } from '../components/EnvironmentSwitcher';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import type { PoliceUnit } from '../types';
-import { supabase, getSupabaseAdmin } from '../config/supabase';
+import { supabase, getSupabaseAdmin, getTableName } from '../config/supabase';
 import { FiUpload, FiTrash2, FiSettings, FiLogOut, FiUsers } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { crimeService } from '../services/crimeService';
@@ -79,7 +80,7 @@ export const Dashboard: React.FC = () => {
       setError(null);
       
       const { data: allCrimes, error } = await getSupabaseAdmin()
-        .from('crimes2')
+        .from(getTableName('CRIMES'))
         .select('*')
         .eq('RISP do fato', 'RISP 5'); // Filtrando apenas crimes da RISP 5
 
@@ -166,7 +167,7 @@ export const Dashboard: React.FC = () => {
 
       const [crimesResponse, targetsResponse] = await Promise.all([
         supabase
-          .from('crimes2')
+          .from(getTableName('CRIMES'))
           .select('*')
           .eq('RISP do fato', 'RISP 5')
           .in('Indicador estrategico', ['letalidade violenta', 'roubo de rua', 'roubo de veículo', 'roubo de carga']),
@@ -361,7 +362,7 @@ export const Dashboard: React.FC = () => {
     if (window.confirm('Tem certeza que deseja limpar todos os dados? Esta ação não pode ser desfeita.')) {
       try {
         const { error: deleteError } = await getSupabaseAdmin()
-          .from('crimes2')
+          .from(getTableName('CRIMES'))
           .delete()
           .neq('objectid', '0'); // usando neq para garantir que a query afete todas as linhas
 
@@ -839,6 +840,45 @@ export const Dashboard: React.FC = () => {
                 </ResponsiveContainer>
               </div>
             </div>
+            
+            {/* Admin Tools Section */}
+            {isAdmin && (
+              <div className="mt-8">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Ferramentas de Administrador</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Card de Importação */}
+                  <div className="bg-white rounded-lg shadow-lg p-6">
+                    <ImportButton onSuccess={handleImportSuccess} />
+                  </div>
+                  
+                  {/* Card de Troca de Ambiente */}
+                  <div className="bg-white rounded-lg shadow-lg p-6">
+                    <EnvironmentSwitcherButton isAdmin={isAdmin} />
+                  </div>
+
+                  {/* Card de Limpeza de Dados */}
+                  <div className="bg-white rounded-lg shadow-lg p-6">
+                    <button
+                      onClick={handleClearData}
+                      className="flex flex-col items-center justify-center p-6 border border-red-300 bg-red-50 rounded-lg w-full h-full shadow transition-colors hover:bg-red-100"
+                    >
+                      <div className="text-4xl mb-3 text-red-600">
+                        <FiTrash2 />
+                      </div>
+                      <div className="text-lg font-semibold mb-1">
+                        Limpar Todos os Dados
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Remove todos os dados de ocorrências cadastrados no sistema
+                      </p>
+                      <div className="mt-2 text-xs text-red-500">
+                        Esta ação não pode ser desfeita
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

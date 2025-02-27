@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { getSupabaseAdmin } from '../config/supabase';
+import { getSupabaseAdmin, getTableName } from '../config/supabase';
 import { toast } from 'react-hot-toast';
 
 export const CrimeHistory: React.FC = () => {
@@ -16,7 +16,7 @@ export const CrimeHistory: React.FC = () => {
       try {
         setLoading(true);
         const { data, error } = await getSupabaseAdmin()
-          .from('crimes2')
+          .from(getTableName('CRIMES'))
           .select('*')
           .eq('RO', ro)
           .single();

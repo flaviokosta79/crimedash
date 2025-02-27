@@ -9,6 +9,7 @@ import { ArrowLeft } from 'lucide-react';
 import { CrimeMap } from '../components/CrimeMap';
 import type { CrimeType, PoliceUnit } from '../types';
 import { supabase as supabaseAdmin } from '../config/supabase';
+import { getTableName } from '../config/supabase';
 
 // Update CrimeData type to match the component requirements
 interface CrimeData {
@@ -443,7 +444,7 @@ export const UnitDashboard: React.FC = () => {
     setLoading(true);
     try {
       const { data: crimes, error } = await supabaseAdmin
-        .from('crimes2')
+        .from(getTableName('CRIMES'))
         .select('*')
         .eq('AISP do fato', unit);
 

@@ -1,8 +1,19 @@
-import { supabase, getSupabaseAdmin } from '../config/supabase';
+import { supabase, getSupabaseAdmin, getTableName } from '../config/supabase';
+
+// Mapa de unidades para sua RISP correspondente
+const UNIT_TO_RISP: Record<string, string> = {
+  'RISP 5': 'RISP 5',
+  'AISP 10': 'RISP 5',
+  'AISP 28': 'RISP 5',
+  'AISP 33': 'RISP 5',
+  'AISP 37': 'RISP 5',
+  'AISP 43': 'RISP 5'
+};
 
 export interface Target {
   id?: number;
   unit: string;
+  risp: string;
   year: number;
   semester: number;
   crime_type: string;
@@ -15,7 +26,7 @@ export const targetService = {
   async getTargets(year: number, semester: number) {
     try {
       const { data, error } = await supabase
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .select('*')
         .eq('year', year)
         .eq('semester', semester)
@@ -32,7 +43,7 @@ export const targetService = {
   async updateTarget(target: Target) {
     try {
       const { error } = await supabase
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .update({ 
           target_value: target.target_value,
           updated_at: new Date().toISOString()
@@ -53,9 +64,15 @@ export const targetService = {
 
   async importTargets(targets: Target[]) {
     try {
+      // Adiciona o campo RISP para cada target
+      const targetsWithRisp = targets.map(target => ({
+        ...target,
+        risp: UNIT_TO_RISP[target.unit] || 'RISP 5'
+      }));
+
       const { error } = await getSupabaseAdmin()
-        .from('targets')
-        .upsert(targets, {
+        .from(getTableName('TARGETS'))
+        .upsert(targetsWithRisp, {
           onConflict: 'unit,year,semester,crime_type',
           ignoreDuplicates: false
         });
@@ -71,7 +88,7 @@ export const targetService = {
   async clearTargets() {
     try {
       const { error } = await getSupabaseAdmin()
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .delete()
         .neq('id', 0);
 
@@ -87,7 +104,7 @@ export const targetService = {
     try {
       // Primeiro, salvamos os valores atuais para possível desfazer
       const { data: currentTargets, error: fetchError } = await getSupabaseAdmin()
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .select('*')
         .match({ unit, year, semester });
 
@@ -104,7 +121,7 @@ export const targetService = {
       }));
 
       const { error: updateError } = await getSupabaseAdmin()
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .upsert(updatedTargets, {
           onConflict: 'id',
           ignoreDuplicates: false
@@ -127,7 +144,7 @@ export const targetService = {
 
       const targets = JSON.parse(backupData);
       const { error } = await getSupabaseAdmin()
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .upsert(targets);
 
       if (error) throw error;
@@ -145,7 +162,7 @@ export const targetService = {
     try {
       // Primeiro verifica se a tabela tem a estrutura correta
       const { error: checkError } = await getSupabaseAdmin()
-        .from('targets')
+        .from(getTableName('TARGETS'))
         .select('id')
         .limit(1);
 
@@ -169,30 +186,18 @@ export const targetService = {
       // Tenta inicializar o schema primeiro
       await this.initializeDatabaseSchema();
 
-      // Segue com o resto da lógica
-      const { data: existingTargets, error: fetchError } = await getSupabaseAdmin()
-        .from('targets')
-        .select('*')
-        .eq('year', targets[0].year)
-        .eq('semester', targets[0].semester);
-
-      if (fetchError) throw fetchError;
-
-      // Preparar dados para insert/update
-      const upsertData = targets.map(target => ({
-        unit: target.unit,
-        year: target.year,
-        semester: target.semester,
-        crime_type: target.crime_type,
-        target_value: target.target_value,
+      // Adiciona o campo RISP para cada target
+      const targetsWithRisp = targets.map(target => ({
+        ...target,
+        risp: UNIT_TO_RISP[target.unit] || 'RISP 5',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
 
       // Realizar upsert usando a constraint única
       const { error: upsertError } = await getSupabaseAdmin()
-        .from('targets')
-        .upsert(upsertData, {
+        .from(getTableName('TARGETS'))
+        .upsert(targetsWithRisp, {
           onConflict: 'unit,year,semester,crime_type',
           ignoreDuplicates: false
         });

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { CrimeData } from '../types';
-import { supabase, getSupabaseAdmin } from '../config/supabase';
+import { supabase, getSupabaseAdmin, getTableName } from '../config/supabase';
 
 interface XLSXRow {
   'objectid': string;
@@ -31,7 +31,7 @@ export const crimeService = {
       // Limpar dados existentes
       console.log('Limpando dados existentes...');
       const { error: deleteError } = await getSupabaseAdmin()
-        .from('crimes2')
+        .from(getTableName('CRIMES'))
         .delete()
         .neq('objectid', '0');
 
@@ -134,7 +134,7 @@ export const crimeService = {
       for (let i = 0; i < crimes.length; i += batchSize) {
         const batch = crimes.slice(i, i + batchSize);
         const { error: insertError } = await getSupabaseAdmin()
-          .from('crimes2')
+          .from(getTableName('CRIMES'))
           .insert(batch);
 
         if (insertError) {
@@ -154,7 +154,7 @@ export const crimeService = {
 
   async getCrimesByUnit(unit: string) {
     const { data, error } = await supabase
-      .from('crimes2')
+      .from(getTableName('CRIMES'))
       .select('*')
       .eq('AISP do fato', unit);
 
@@ -164,7 +164,7 @@ export const crimeService = {
 
   async getTimeseriesByUnit(unit: string) {
     const { data, error } = await supabase
-      .from('crime_timeseries')
+      .from(getTableName('TIMESERIES'))
       .select('*')
       .eq('unit', unit)
       .order('date', { ascending: true });
@@ -176,7 +176,7 @@ export const crimeService = {
   async getTimeSeriesData(unit: string, startDate: Date, endDate: Date) {
     try {
       const { data, error } = await supabase
-        .from('crimes2')
+        .from(getTableName('CRIMES'))
         .select('*')
         .eq('AISP do fato', unit)
         .gte('data_fato', startDate.toISOString().split('T')[0])

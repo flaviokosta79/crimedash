@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
-import { Toaster, toast } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { FiArrowLeft } from 'react-icons/fi';
 import { EditableTargetValue } from '../components/EditableTargetValue';
 import { DeleteButton } from '../components/DeleteButton';
@@ -13,15 +13,6 @@ export function Targets() {
   const [error, setError] = useState<string | null>(null);
   const [editingTarget, setEditingTarget] = useState<Target | null>(null);
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, []);
 
   const crimeTypes = [
     'letalidade violenta',
@@ -55,32 +46,6 @@ export function Targets() {
     });
   };
 
-  // Função para garantir que todas as unidades e tipos de crime existam
-  const ensureAllTargetsExist = (data: Target[]) => {
-    const allTargets: Target[] = [];
-    
-    // Para cada RISP e tipo de crime, garantir que existe uma meta
-    risps.forEach(risp => {
-      crimeTypes.forEach(crimeType => {
-        const existingTarget = data.find(t => t.unit === risp && t.crime_type === crimeType);
-        if (existingTarget) {
-          allTargets.push(existingTarget);
-        } else {
-          // Criar meta com valor zero se não existir
-          allTargets.push({
-            unit: risp,
-            year: 2025,
-            semester: 1,
-            crime_type: crimeType,
-            target_value: 0
-          });
-        }
-      });
-    });
-
-    return sortTargets(allTargets);
-  };
-
   useEffect(() => {
     fetchTargets();
   }, []);
@@ -110,6 +75,7 @@ export function Targets() {
       const initialTargets = risps.flatMap(risp => 
         crimeTypes.map(crimeType => ({
           unit: risp,
+          risp: risp, // Adicionando o campo risp
           year: 2025,
           semester: 1,
           crime_type: crimeType,
