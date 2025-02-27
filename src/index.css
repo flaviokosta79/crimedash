@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600&display=swap');
+@import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
 @tailwind components;
@@ -29,4 +30,32 @@ body {
 #root {
   width: 100%;
   height: 100%;
+}
+
+/* Fix Leaflet Map Container */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Adicionar estilos específicos para o Leaflet */
+.leaflet-div-icon {
+  background: transparent;
+  border: none;
+}
+
+/* Garantir que os popups do Leaflet apareçam acima de outros elementos */
+.leaflet-tooltip,
+.leaflet-popup {
+  z-index: 1000 !important;
+}
+
+/* Corrigir problema com o ponteiro do mouse no mapa */
+.leaflet-grab {
+  cursor: grab;
+}
+
+.leaflet-dragging .leaflet-grab {
+  cursor: grabbing;
 }

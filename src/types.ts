@@ -9,6 +9,7 @@ export interface CrimeData {
   lng: number;
   shift: Shift;
   region: string;
+  bairros: string[]; // Adicionando o campo bairros
 }
 
 export type CrimeType = 
@@ -18,11 +19,12 @@ export type CrimeType =
   | 'Roubo de Carga';
 
 export type PoliceUnit = 
-  | '10o BPM'
-  | '28o BPM'
-  | '33o BPM'
-  | '37o BPM'
-  | '2a CIPM';
+  | 'AISP 10'
+  | 'AISP 28'
+  | 'AISP 33'
+  | 'AISP 37'
+  | 'AISP 43'
+  | 'RISP 5';
 
 export type Shift = 'Manhã' | 'Tarde' | 'Noite';
 

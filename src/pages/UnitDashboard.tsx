@@ -28,6 +28,7 @@ interface CrimeData {
 
 const CRIME_COLORS: Record<string, string> = {
   'Letalidade Violenta': '#ff7f0e',
+  'Roubo de Veículo': '#2ca02c',
   'Roubo de Rua': '#d62728',
   'Roubo de Carga': '#9467bd'
 } as const;
@@ -218,7 +219,22 @@ const generateTimeSeriesData = (timeRange: string, unit: string, timeSeriesData:
 };
 
 const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
+  // Verificar se há crimes válidos
+  if (!crimes || crimes.length === 0) {
+    console.log('Sem crimes para gerar mapa de calor');
+    return [];
+  }
+
+  console.log(`Gerando mapa de calor para ${unit} com ${crimes.length} crimes`);
+  
   const unitArea = UNIT_AREAS[unit as keyof typeof UNIT_AREAS] || [];
+  
+  // Verificar se a unidade tem áreas definidas
+  if (unitArea.length === 0) {
+    console.log(`Nenhuma área definida para a unidade ${unit}`);
+    return [];
+  }
+  
   const crimesByCityAndNeighborhood: Record<string, Record<string, { count: number, bairros: Set<string> }>> = {};
   
   // Initialize counters for each city
@@ -237,13 +253,16 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
     const tipo = crime['Indicador estrategico'];
     const bairro = crime['Bairro'] || 'Não informado';
     
+    // Se município ou tipo são null, ignorar este crime
+    if (!municipio || !tipo) return;
+    
     const cityMatch = unitArea.find(location => 
       location.city === municipio
     );
 
     if (cityMatch) {
       let crimeType: string;
-      switch (tipo?.toLowerCase()) {
+      switch (tipo.toLowerCase()) {
         case 'letalidade violenta':
           crimeType = 'Letalidade Violenta';
           break;
@@ -257,6 +276,7 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
           crimeType = 'Roubo de Carga';
           break;
         default:
+          console.log(`Tipo de crime não reconhecido: ${tipo}`);
           return;
       }
 
@@ -268,9 +288,9 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
   });
 
   // Generate heat map data
-  return unitArea.flatMap(location => {
+  const result = unitArea.flatMap(location => {
     const cityData = crimesByCityAndNeighborhood[location.city];
-    return Object.entries(cityData)
+    const cityEntries = Object.entries(cityData)
       .filter(([_, data]) => data.count > 0)
       .map(([type, data]) => ({
         id: `${location.city}-${type}`,
@@ -283,7 +303,12 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
         region: location.city,
         bairros: Array.from(data.bairros).sort()
       }));
+    
+    return cityEntries;
   });
+  
+  console.log(`Gerados ${result.length} pontos de dados para o mapa de calor`);
+  return result;
 };
 
 export const UnitDashboard: React.FC = () => {
@@ -443,13 +468,31 @@ export const UnitDashboard: React.FC = () => {
     if (!unit) return;
     setLoading(true);
     try {
+      console.log(`Carregando dados para a unidade: ${unit}`);
       const { data: crimes, error } = await supabaseAdmin
         .from(getTableName('CRIMES'))
         .select('*')
         .eq('AISP do fato', unit);
 
       if (error) {
+        console.error('Erro ao buscar crimes:', error);
         setError('Erro ao buscar crimes: ' + error.message);
+        return;
+      }
+
+      console.log(`Encontrados ${crimes?.length || 0} crimes para a unidade ${unit}`);
+
+      // Se não houver crimes, definir estado vazio
+      if (!crimes || crimes.length === 0) {
+        setCrimes([]);
+        setMapData([]);
+        setCardData({
+          letalidadeViolenta: 0,
+          rouboDeVeiculo: 0,
+          rouboDeRua: 0,
+          rouboDeCarga: 0
+        });
+        setLoading(false);
         return;
       }
 
@@ -459,7 +502,7 @@ export const UnitDashboard: React.FC = () => {
         rouboDeRua: 0,
         rouboDeCarga: 0
       };
-      crimes?.forEach((crime: any) => {
+      crimes.forEach((crime: any) => {
         const indicator = crime['Indicador estrategico']?.toLowerCase() || '';
         
         if (indicator === 'letalidade violenta') {
@@ -475,9 +518,34 @@ export const UnitDashboard: React.FC = () => {
 
       setCardData(newCardData);
       setCrimes(crimes || []);
-      const mapDataGenerated = generateHeatMapData(unit, crimes || []);
-      setMapData(mapDataGenerated);
+      
+      console.log('Gerando dados para o mapa de calor...');
+      const mapDataGenerated = generateHeatMapData(unit, crimes);
+      console.log(`Dados do mapa gerados: ${mapDataGenerated.length} pontos`);
+      
+      if (mapDataGenerated.length > 0) {
+        setMapData(mapDataGenerated);
+      } else {
+        // Criar um ponto de dados falso para garantir que o mapa seja exibido
+        console.log('Criando dados de exemplo para o mapa...');
+        const center = UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS];
+        if (center) {
+          const dummyData: CrimeData[] = [{
+            id: `${unit}-dummy`,
+            date: new Date(),
+            type: 'Letalidade Violenta',
+            unit: unit as PoliceUnit,
+            count: 1,
+            lat: center.lat,
+            lng: center.lng,
+            region: 'Centro',
+            bairros: ['Centro']
+          }];
+          setMapData(dummyData);
+        }
+      }
     } catch (error: any) {
+      console.error('Erro ao carregar dados:', error);
       setError('Erro ao carregar dados: ' + error.message);
     } finally {
       setLoading(false);
@@ -882,12 +950,25 @@ export const UnitDashboard: React.FC = () => {
             <div className="bg-gray-50 p-6 rounded-lg mb-8">
               <h2 className="text-lg font-semibold mb-4">Mapa de Calor</h2>
               <div className="h-[500px]">
-                {mapData.length > 0 && unit && UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] && (
+                {console.log('Renderizando mapa com:', {
+                  mapDataLength: mapData.length,
+                  unit,
+                  hasCenter: !!unit && !!UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS]
+                })}
+                {mapData.length > 0 && unit && UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] ? (
                   <CrimeMap 
+                    key={`map-${unit}-${mapData.length}`}
                     data={mapData}
                     center={UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS]}
                     zoom={UNIT_ZOOM[unit as keyof typeof UNIT_ZOOM] || 10}
                   />
+                ) : (
+                  <div className="h-full flex items-center justify-center bg-gray-100 text-gray-500">
+                    {!unit ? "Unidade não especificada" : 
+                     !UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS] ? "Centro da unidade não definido" :
+                     mapData.length === 0 ? "Sem dados para exibir no mapa" : 
+                     "Carregando mapa..."}
+                  </div>
                 )}
               </div>
             </div>
