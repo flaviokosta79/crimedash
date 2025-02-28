@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from 'recharts';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 import { CrimeMap } from '../components/CrimeMap';
 import type { CrimeType, PoliceUnit, PoliceRegion } from '../types';
 import { supabase as supabaseAdmin } from '../config/supabase';
@@ -996,7 +996,14 @@ export const UnitDashboard: React.FC = () => {
                               {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {crime['RO']}
+                              <div className="flex items-center">
+                                {crime['RO']}
+                                {hasHistory && (
+                                  <span className="ml-2 text-blue-500" title="Esta ocorrência possui histórico">
+                                    <FileText size={16} />
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
                               {crime['Indicador estrategico']?.toLowerCase()}
