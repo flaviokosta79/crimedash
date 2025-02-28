@@ -7,23 +7,21 @@ import {
 } from 'recharts';
 import { ArrowLeft } from 'lucide-react';
 import { CrimeMap } from '../components/CrimeMap';
-import type { CrimeType, PoliceUnit } from '../types';
+import type { CrimeType, PoliceUnit, PoliceRegion } from '../types';
 import { supabase as supabaseAdmin } from '../config/supabase';
 import { getTableName } from '../config/supabase';
 
-// Update CrimeData type to match the component requirements
-interface CrimeData {
+// Update LocalCrimeData interface to exactly match CrimeData interface from types.ts
+interface LocalCrimeData {
   id: string;
-  date: Date;
+  date: string;
   type: CrimeType;
   unit: PoliceUnit;
+  region: PoliceRegion;  // Changed from string to PoliceRegion
   count: number;
+  target: number;
   lat: number;
   lng: number;
-  region: string;
-  bairros: string[];
-  target?: number;
-  shift?: string;
 }
 
 const CRIME_COLORS: Record<string, string> = {
@@ -85,140 +83,8 @@ const UNIT_ZOOM = {
   'AISP 43': 11  // Área pequena, zoom mais próximo
 };
 
-// Define AISP colors
-const UNIT_COLORS = {
-  'AISP 10': '#1f77b4',
-  'AISP 28': '#ff7f0e',
-  'AISP 33': '#2ca02c',
-  'AISP 37': '#d62728',
-  'AISP 43': '#9467bd'
-};
-
-interface CrimeMetrics {
-  name: string;
-  atual: number;
-  meta: number;
-}
-
-const generateCrimeMetrics = (unit: string, crimeData: any[]): CrimeMetrics[] => {
-  // Extract crime data for the specified unit
-  const crimeMetrics = [
-    {
-      name: 'Letalidade Violenta',
-      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'letalidade violenta').length,
-      meta: 75
-    },
-    {
-      name: 'Roubo de Veículo',
-      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'roubo de veículo').length,
-      meta: 75
-    },
-    {
-      name: 'Roubo de Rua',
-      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'roubo de rua').length,
-      meta: 75
-    },
-    {
-      name: 'Roubo de Carga',
-      atual: crimeData.filter((crime) => crime.indicador_estrategico?.toLowerCase() === 'roubo de carga').length,
-      meta: 75
-    }
-  ];
-
-  return crimeMetrics;
-};
-
-// Update the generateTimeSeriesData function to include card visualization data
-const generateTimeSeriesData = (timeRange: string, unit: string, timeSeriesData: any[]) => {
-  const data = [];
-  const now = new Date();
-  let periods;
-  let dateFormat: Intl.DateTimeFormatOptions;
-
-  switch(timeRange) {
-    case 'D':
-      periods = 24;
-      dateFormat = { hour: '2-digit' };
-      for (let i = 0; i < periods; i++) {
-        const date = new Date(now);
-        date.setHours(date.getHours() - (periods - i));
-        data.push({
-          date,
-          occurrences: Math.floor(Math.random() * 50) + 50,
-          target: 75
-        });
-      }
-      break;
-    
-    case 'W':
-      periods = 7;
-      dateFormat = { weekday: 'short' };
-      for (let i = 0; i < periods; i++) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - (periods - i));
-        data.push({
-          date,
-          occurrences: Math.floor(Math.random() * 50) + 50,
-          target: 75
-        });
-      }
-      break;
-    
-    case 'M':
-      periods = 30;
-      dateFormat = { day: '2-digit', month: 'short' };
-      for (let i = 0; i < periods; i++) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - (periods - i));
-        data.push({
-          date,
-          occurrences: Math.floor(Math.random() * 50) + 50,
-          target: 75
-        });
-      }
-      break;
-    
-    case '6M':
-      periods = 6;
-      dateFormat = { month: 'short' };
-      for (let i = 0; i < periods; i++) {
-        const date = new Date(now);
-        date.setMonth(date.getMonth() - (periods - i));
-        data.push({
-          date,
-          occurrences: Math.floor(Math.random() * 50) + 50,
-          target: 75
-        });
-      }
-      break;
-    
-    case 'Y':
-      periods = 12;
-      dateFormat = { month: 'short' };
-      for (let i = 0; i < periods; i++) {
-        const date = new Date(now);
-        date.setMonth(date.getMonth() - (periods - i));
-        data.push({
-          date,
-          occurrences: Math.floor(Math.random() * 50) + 50,
-          target: 75
-        });
-      }
-      break;
-  }
-
-  const cardData = {
-    total: data.reduce((sum, item) => sum + item.occurrences, 0),
-    average: Math.round(data.reduce((sum, item) => sum + item.occurrences, 0) / data.length),
-    max: Math.max(...data.map(item => item.occurrences)),
-    min: Math.min(...data.map(item => item.occurrences)),
-    trend: ((data[data.length - 1].occurrences - data[0].occurrences) / data[0].occurrences * 100).toFixed(1)
-  };
-
-  return { data, dateFormat, cardData };
-};
-
-const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
+// Update the generateHeatMapData function to match the interface
+const generateHeatMapData = (unit: string, crimes: any[]): LocalCrimeData[] => {
   // Verificar se há crimes válidos
   if (!crimes || crimes.length === 0) {
     console.log('Sem crimes para gerar mapa de calor');
@@ -294,14 +160,14 @@ const generateHeatMapData = (unit: string, crimes: any[]): CrimeData[] => {
       .filter(([_, data]) => data.count > 0)
       .map(([type, data]) => ({
         id: `${location.city}-${type}`,
-        date: new Date(),
+        date: new Date().toISOString(), // Convert to ISO string
         type: type as CrimeType,
         unit: unit as PoliceUnit,
+        region: 'RISP 5' as PoliceRegion,  // Fixed region type
         count: data.count,
         lat: location.lat,
         lng: location.lng,
-        region: location.city,
-        bairros: Array.from(data.bairros).sort()
+        target: 0  // Add required target property with default value
       }));
     
     return cityEntries;
@@ -320,8 +186,7 @@ export const UnitDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [crimes, setCrimes] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [timeRange, setTimeRange] = useState<string>('M');
-  const [mapData, setMapData] = useState<CrimeData[]>([]);
+  const [mapData, setMapData] = useState<LocalCrimeData[]>([]);  // Use LocalCrimeData instead
   const [cardData, setCardData] = useState({
     letalidadeViolenta: 0,
     rouboDeVeiculo: 0,
@@ -338,6 +203,7 @@ export const UnitDashboard: React.FC = () => {
     timeRange: ''
   });
   const [visibleItems, setVisibleItems] = useState(10);
+  const [crimesWithHistory, setCrimesWithHistory] = useState<Set<string>>(new Set());
 
   // Memoized values
   const sortedCrimes = useMemo(() => 
@@ -404,12 +270,14 @@ export const UnitDashboard: React.FC = () => {
     }));
   };
 
+  // Modificando o handleScroll para melhorar a detecção do final da rolagem
   const handleScroll = useCallback((e: Event) => {
     const target = e.target as HTMLDivElement;
     if (!target) return;
 
     const { scrollTop, scrollHeight, clientHeight } = target;
-    if (scrollHeight - scrollTop - clientHeight < 50) {
+    // Se o usuário rolou até 100px do final, carregamos mais itens
+    if (scrollHeight - scrollTop - clientHeight < 100) {
       setVisibleItems(prev => Math.min(prev + 10, filteredCrimes.length));
     }
   }, [filteredCrimes.length]);
@@ -418,8 +286,26 @@ export const UnitDashboard: React.FC = () => {
   useEffect(() => {
     const tableContainer = tableRef.current;
     if (tableContainer) {
-      tableContainer.addEventListener('scroll', handleScroll);
-      return () => tableContainer.removeEventListener('scroll', handleScroll);
+      // Adicionando um listener de log para debug
+      console.log("Adicionando evento de scroll ao container da tabela");
+      
+      // Usando um debounce para evitar muitas chamadas de handleScroll
+      let scrollTimeout: NodeJS.Timeout | null = null;
+      
+      const debouncedHandleScroll = (e: Event) => {
+        if (scrollTimeout) {
+          clearTimeout(scrollTimeout);
+        }
+        scrollTimeout = setTimeout(() => {
+          handleScroll(e);
+        }, 100);
+      };
+      
+      tableContainer.addEventListener('scroll', debouncedHandleScroll);
+      return () => {
+        console.log("Removendo evento de scroll do container da tabela");
+        tableContainer.removeEventListener('scroll', debouncedHandleScroll);
+      };
     }
   }, [handleScroll]);
 
@@ -492,6 +378,7 @@ export const UnitDashboard: React.FC = () => {
           rouboDeRua: 0,
           rouboDeCarga: 0
         });
+        setCrimesWithHistory(new Set());
         setLoading(false);
         return;
       }
@@ -518,6 +405,25 @@ export const UnitDashboard: React.FC = () => {
 
       setCardData(newCardData);
       setCrimes(crimes || []);
+
+      // Buscar quais ROs possuem histórico
+      if (crimes && crimes.length > 0) {
+        const ros = crimes.map((crime) => crime.RO);
+        // Verificar quais ROs têm histórico
+        const { data: historiesData } = await supabaseAdmin
+          .from(getTableName('HISTORY'))
+          .select('ro')
+          .in('ro', ros);
+          
+        if (historiesData && historiesData.length > 0) {
+          // Criar um Set com os ROs que têm histórico
+          const roWithHistorySet = new Set(historiesData.map(h => h.ro));
+          setCrimesWithHistory(roWithHistorySet);
+          console.log(`Encontrados ${roWithHistorySet.size} ROs com histórico`);
+        } else {
+          setCrimesWithHistory(new Set());
+        }
+      }
       
       console.log('Gerando dados para o mapa de calor...');
       const mapDataGenerated = generateHeatMapData(unit, crimes);
@@ -530,16 +436,16 @@ export const UnitDashboard: React.FC = () => {
         console.log('Criando dados de exemplo para o mapa...');
         const center = UNIT_CENTERS[unit as keyof typeof UNIT_CENTERS];
         if (center) {
-          const dummyData: CrimeData[] = [{
+          const dummyData: LocalCrimeData[] = [{
             id: `${unit}-dummy`,
-            date: new Date(),
+            date: new Date().toISOString(),
             type: 'Letalidade Violenta',
             unit: unit as PoliceUnit,
+            region: 'RISP 5' as PoliceRegion,  // Fixed region type
             count: 1,
             lat: center.lat,
             lng: center.lng,
-            region: 'Centro',
-            bairros: ['Centro']
+            target: 0
           }];
           setMapData(dummyData);
         }
@@ -716,8 +622,6 @@ export const UnitDashboard: React.FC = () => {
       meta: targets[unit as string]?.['roubo de carga'] || 0
     }
   ];
-
-  const { data: timeSeriesData, cardData: timeSeriesCardData } = generateTimeSeriesData(timeRange, unit || '', []);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -981,6 +885,14 @@ export const UnitDashboard: React.FC = () => {
                   ref={tableRef}
                   className="max-h-[600px] overflow-y-auto" 
                   style={{ height: '500px' }}
+                  onScroll={(e) => {
+                    // Adicionando um manipulador de eventos diretamente no JSX para garantir que o scroll funcione
+                    const target = e.currentTarget;
+                    const { scrollTop, scrollHeight, clientHeight } = target;
+                    if (scrollHeight - scrollTop - clientHeight < 100) {
+                      setVisibleItems(prev => Math.min(prev + 10, filteredCrimes.length));
+                    }
+                  }}
                 >
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50 sticky top-0 z-10">
@@ -1072,45 +984,66 @@ export const UnitDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredCrimes.slice(0, visibleItems).map((crime) => (
-                        <tr 
-                          key={crime.objectid} 
-                          className="hover:bg-gray-50 cursor-pointer transition-colors"
-                          onClick={() => navigate(`/crime/${crime['RO']}`)}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {crime['RO']}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                            {crime['Indicador estrategico']?.toLowerCase()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {crime['Municipio do fato (IBGE)']}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {crime['Bairro']}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {crime['Faixa horaria']}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredCrimes.slice(0, visibleItems).map((crime) => {
+                        const hasHistory = crimesWithHistory.has(crime['RO']);
+                        return (
+                          <tr 
+                            key={crime.objectid} 
+                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${hasHistory ? 'bg-blue-50' : ''}`}
+                            onClick={() => navigate(`/crime/${crime['RO']}`)}
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {`${crime['Dia do registro']}/${crime['Mes do registro']}/${crime['Ano do registro']}`}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {crime['RO']}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                              {crime['Indicador estrategico']?.toLowerCase()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {crime['Municipio do fato (IBGE)']}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {crime['Bairro']}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {crime['Faixa horaria']}
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {visibleItems < filteredCrimes.length && (
                         <tr>
                           <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                             Role para baixo para ver mais ocorrências...
+                            <button 
+                              className="ml-2 px-4 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md" 
+                              onClick={() => setVisibleItems(prev => Math.min(prev + 20, filteredCrimes.length))}
+                            >
+                              Carregar mais
+                            </button>
                           </td>
                         </tr>
                       )}
                     </tbody>
                   </table>
+                  {/* Loading indicator */}
+                  {visibleItems < filteredCrimes.length && (
+                    <div className="py-4 text-center">
+                      <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
+                      <span className="ml-2 text-gray-500">Carregando mais...</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-4 text-sm text-gray-600 text-right">
                 Mostrando {Math.min(visibleItems, filteredCrimes.length)} de {filteredCrimes.length} ocorrências
+                {crimesWithHistory.size > 0 && (
+                  <span className="ml-2">
+                    (<span className="text-blue-500">{crimesWithHistory.size}</span> com histórico)
+                  </span>
+                )}
               </div>
             </div>
 

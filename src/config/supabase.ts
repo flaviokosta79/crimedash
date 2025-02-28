@@ -29,7 +29,7 @@ export const isDevelopmentMode = (): boolean => {
 };
 
 // Função para obter o nome correto da tabela (avaliada a cada chamada)
-export const getTableName = (tableKey: 'CRIMES' | 'TARGETS' | 'TIMESERIES'): string => {
+export const getTableName = (tableKey: 'CRIMES' | 'TARGETS' | 'TIMESERIES' | 'HISTORY'): string => {
   const isDev = isDevelopmentMode();
   let tableName;
   
@@ -42,6 +42,9 @@ export const getTableName = (tableKey: 'CRIMES' | 'TARGETS' | 'TIMESERIES'): str
       break;
     case 'TIMESERIES':
       tableName = isDev ? 'crime_timeseries_test' : 'crime_timeseries';
+      break;
+    case 'HISTORY':
+      tableName = isDev ? 'history_test' : 'history';
       break;
   }
   

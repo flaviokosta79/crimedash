@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ImportButton } from '../components/ImportButton';
 import { TimeRangeSelector } from '../components/TimeRangeSelector';
 import { EnvironmentSwitcherButton } from '../components/EnvironmentSwitcher';
+import { ImportHistoryButton } from '../components/ImportHistoryButton';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, Legend, ResponsiveContainer
@@ -845,10 +846,15 @@ export const Dashboard: React.FC = () => {
             {isAdmin && (
               <div className="mt-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Ferramentas de Administrador</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Card de Importação */}
                   <div className="bg-white rounded-lg shadow-lg p-6">
                     <ImportButton onSuccess={handleImportSuccess} />
+                  </div>
+                  
+                  {/* Card de Importação de Históricos */}
+                  <div className="bg-white rounded-lg shadow-lg p-6">
+                    <ImportHistoryButton onSuccess={fetchCardData} />
                   </div>
                   
                   {/* Card de Troca de Ambiente */}

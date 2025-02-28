@@ -3,7 +3,8 @@ export type PoliceUnit =
   | 'AISP 28'
   | 'AISP 33'
   | 'AISP 37'
-  | 'AISP 43';
+  | 'AISP 43'
+  | 'RISP 5';
 
 export type PoliceRegion = 
   | 'RISP 1'

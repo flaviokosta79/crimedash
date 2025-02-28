@@ -45,7 +45,8 @@ function App() {
           </PrivateRoute>
         } />
 
-        <Route path="/crime/:ro" element={
+        {/* Modificando a rota de crime para capturar todo o resto do path com * */}
+        <Route path="/crime/:ro/*" element={
           <PrivateRoute>
             <CrimeHistory />
           </PrivateRoute>

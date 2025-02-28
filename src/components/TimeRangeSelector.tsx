@@ -1,34 +1,47 @@
 import React from 'react';
-
-type TimeRange = '7D' | '30D' | '90D';
+import type { TimeRange } from '../types';
 
 interface TimeRangeSelectorProps {
-  value: TimeRange;
-  onChange: (value: TimeRange) => void;
+  timeRange: TimeRange;
+  onChange: (newRange: TimeRange) => void;
 }
 
-export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
-  const options: { value: TimeRange; label: string }[] = [
-    { value: '7D', label: '7 dias' },
-    { value: '30D', label: '30 dias' },
-    { value: '90D', label: '90 dias' },
-  ];
-
+export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({
+  timeRange,
+  onChange
+}) => {
   return (
-    <div className="flex space-x-2">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          onClick={() => onChange(option.value)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            value === option.value
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => onChange('7D')}
+        className={`px-3 py-1 text-sm rounded-md ${
+          timeRange === '7D'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        7D
+      </button>
+      <button
+        onClick={() => onChange('30D')}
+        className={`px-3 py-1 text-sm rounded-md ${
+          timeRange === '30D'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        30D
+      </button>
+      <button
+        onClick={() => onChange('90D')}
+        className={`px-3 py-1 text-sm rounded-md ${
+          timeRange === '90D'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        90D
+      </button>
     </div>
   );
-}
+};
